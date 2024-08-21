@@ -3,7 +3,7 @@ Description=APRS Listener Service
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/ubuntu/sota-watchtower/ec2/aprs-listner/aprs-listener.py
+ExecStart=/home/ubuntu/sota-watchtower/ec2/aprs-listner/.venv/bin/python /home/ubuntu/sota-watchtower/ec2/aprs-listner/aprs-listener.py
 WorkingDirectory=/home/ubuntu/sota-watchtower/ec2/aprs-listner/
 StandardOutput=inherit
 StandardError=inherit
