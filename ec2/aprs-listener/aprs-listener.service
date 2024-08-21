@@ -1,0 +1,15 @@
+[Unit]
+Description=APRS Listener Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /path/to/aprs-listener.py
+WorkingDirectory=/path/to/
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=ubuntu
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
