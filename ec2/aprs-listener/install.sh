@@ -10,6 +10,12 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
+# Change ownership of the .venv directory to the 'ubuntu' user
+sudo chown -R ubuntu:ubuntu .venv
+
+# Set permissions to 777 for the .venv directory (very permissive, consider 755 or 775 instead)
+sudo chmod -R 777 .venv
+
 # Copy the systemd service file to the appropriate location
 sudo cp aprs-listener.service /etc/systemd/system/
 
