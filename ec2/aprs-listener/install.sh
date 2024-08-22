@@ -3,7 +3,7 @@
 # Install necessary packages
 sudo apt-get update
 sudo apt-get upgrade -y
-sudo apt-get install -y python3-venv
+sudo apt-get install -y python3.12-venv
 
 # Install the required Python packages
 python3 -m venv .venv
