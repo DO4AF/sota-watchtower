@@ -3,13 +3,13 @@ Description=APRS Listener Service
 After=network.target
 
 [Service]
-ExecStart=/home/ubuntu/sota-watchtower/ec2/aprs-listner/.venv/bin/python /home/ubuntu/sota-watchtower/ec2/aprs-listner/aprs-listener.py
-WorkingDirectory=/home/ubuntu/sota-watchtower/ec2/aprs-listner/
+ExecStart=/home/ubuntu/sota-watchtower/ec2/aprs-lisetner/.venv/bin/python /home/ubuntu/sota-watchtower/ec2/aprs-listener/aprs-listener.py
+WorkingDirectory=/home/ubuntu/sota-watchtower/ec2/aprs-listener/
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
 User=ubuntu
-Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/environment
 
 [Install]
 WantedBy=multi-user.target
