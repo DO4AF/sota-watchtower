@@ -1,0 +1,15 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "sota-watchtower-stack"
+tags = "project=\"sota-watchtower\""
+resolve_s3 = true
+s3_prefix = "sota-watchtower-stack"
+region = "eu-central-1"
+capabilities = "CAPABILITY_IAM"
+image_repositories = []
+parameter_overrides =[
+	"TelegramBotToken=<YOUR_TOKEN>",
+	"TelegramUserChatId=<YOUR_CHAT_ID>",
+	"TelegramGroupChatId=<YOUR_CHAT_ID>",
+	"FrequencyFilterPattern=\\b(145|433|2|70).*-.*\\b"
+	]
