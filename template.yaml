@@ -1,0 +1,502 @@
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+  TelegramBotToken:
+    Description: Bot Token for Telegram
+    Type: String
+  TelegramUserChatId:
+    Description: User Chat ID for Telegram
+    Type: String
+  TelegramGroupChatId:
+    Description: Group Chat ID for Telegram
+    Type: String
+  FrequencyFilterPattern:
+    Description: Frequency pattern to filter Alerts
+    Type: String
+Resources:
+  HamAlertApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${AWS::StackName}
+        - ResourceName: HamAlertApi
+      StageName: Prod
+      DefinitionBody:
+        openapi: '3.0'
+        info: {}
+        paths:
+          /notify:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HamAlertProcessFunction.Arn}/invocations
+              responses: {}
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+      Cors:
+        MaxAge: 5
+  HamAlertProcessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: HamAlertProcessFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: HamAlertProcessFunction
+      CodeUri: src/HamAlertProcessFunction
+      Handler: handler.handler
+      Runtime: python3.12
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Events:
+        HamAlertApiPOSTnotify:
+          Type: Api
+          Properties:
+            Path: /notify
+            Method: POST
+            RestApiId: !Ref HamAlertApi
+      Environment:
+        Variables:
+          TELEGRAM_GROUP_ID: !Ref TelegramGroupChatId
+          TELEGRAM_USER_ID: !Ref TelegramUserChatId
+          TELEGRAMNOTIFYFUNCTION_FUNCTION_NAME: !Ref TelegramNotifyFunction
+          TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN: !GetAtt TelegramNotifyFunction.Arn
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref TelegramNotifyFunction
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+  RequestsLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Layer ${ResourceName}
+        - ResourceName: RequestsLayer
+      ContentUri: src/RequestsLayer
+      RetentionPolicy: Delete
+    Metadata:
+      BuildMethod: python3.12
+  GetSotaAlertsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetSotaAlertsFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: GetSotaAlertsFunction
+      CodeUri: src/GetSotaAlertsFunction
+      Handler: handler.handler
+      Runtime: python3.12
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Layers:
+        - !Ref RequestsLayer
+      Environment:
+        Variables:
+          FREQUENCY_FILTER_PATTERN: !Ref FrequencyFilterPattern
+          SOTAALERTSTABLE_TABLE_NAME: !Ref SotaAlertsTable
+          SOTAALERTSTABLE_TABLE_ARN: !GetAtt SotaAlertsTable.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SotaAlertsTable
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+  DailyBriefingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: DailyBriefingFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: DailyBriefingFunction
+      CodeUri: src/DailyBriefingFunction
+      Handler: handler.handler
+      Runtime: python3.12
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TELEGRAM_GROUP_ID: !Ref TelegramGroupChatId
+          GETSOTAALERTSFUNCTION_FUNCTION_NAME: !Ref GetSotaAlertsFunction
+          GETSOTAALERTSFUNCTION_FUNCTION_ARN: !GetAtt GetSotaAlertsFunction.Arn
+          TELEGRAMNOTIFYFUNCTION_FUNCTION_NAME: !Ref TelegramNotifyFunction
+          TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN: !GetAtt TelegramNotifyFunction.Arn
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref GetSotaAlertsFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref TelegramNotifyFunction
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+  TelegramNotifyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: TelegramNotifyFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: TelegramNotifyFunction
+      CodeUri: src/TelegramNotifyFunction
+      Handler: handler.handler
+      Runtime: python3.12
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Layers:
+        - !Ref RequestsLayer
+      Environment:
+        Variables:
+          TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+  GetSotaSpotsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetSotaSpotsFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: GetSotaSpotsFunction
+      CodeUri: src/GetSotaSpotsFunction
+      Handler: handler.handler
+      Runtime: python3.12
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Layers:
+        - !Ref RequestsLayer
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+  ActivationZoneMonitorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ActivationZoneMonitorFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: ActivationZoneMonitorFunction
+      CodeUri: src/ActivationZoneMonitorFunction
+      Handler: handler.handler
+      Runtime: python3.12
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TELEGRAM_GROUP_ID: !Ref TelegramGroupChatId
+          GETSOTAALERTSFUNCTION_FUNCTION_NAME: !Ref GetSotaAlertsFunction
+          GETSOTAALERTSFUNCTION_FUNCTION_ARN: !GetAtt GetSotaAlertsFunction.Arn
+          GETSOTASPOTSFUNCTION_FUNCTION_NAME: !Ref GetSotaSpotsFunction
+          GETSOTASPOTSFUNCTION_FUNCTION_ARN: !GetAtt GetSotaSpotsFunction.Arn
+          SOTAALERTSTABLE_TABLE_NAME: !Ref SotaAlertsTable
+          SOTAALERTSTABLE_TABLE_ARN: !GetAtt SotaAlertsTable.Arn
+          TELEGRAMNOTIFYFUNCTION_FUNCTION_NAME: !Ref TelegramNotifyFunction
+          TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN: !GetAtt TelegramNotifyFunction.Arn
+      Layers:
+        - !Ref RequestsLayer
+        - !Ref GeopyLayer
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref GetSotaAlertsFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref GetSotaSpotsFunction
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SotaAlertsTable
+        - LambdaInvokePolicy:
+            FunctionName: !Ref TelegramNotifyFunction
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+  GeopyLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Layer ${ResourceName}
+        - ResourceName: GeopyLayer
+      ContentUri: src/GeopyLayer
+      RetentionPolicy: Delete
+    Metadata:
+      BuildMethod: python3.12
+  SotaAlertsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: callsign
+          AttributeType: S
+        - AttributeName: summit
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: callsign
+          KeyType: HASH
+        - AttributeName: summit
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TimeToLiveSpecification:
+        AttributeName: expiration
+        Enabled: true
+  AprsMonitorInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      ImageId: ami-0e872aee57663ae2d
+      IamInstanceProfile: !Ref AprsMonitorInstanceProfile
+      SecurityGroupIds:
+        - !Ref AprsMonitorSecurityGroup
+      UserData: !Base64
+        Fn::Sub: |
+          #!/bin/bash
+          echo "ACTIVATIONZONEMONITORFUNCTION_FUNCTION_ARN=${ActivationZoneMonitorFunction.Arn}" >> /etc/profile
+          echo "ACTIVATIONZONEMONITORFUNCTION_FUNCTION_ARN=${ActivationZoneMonitorFunction.Arn}" >> /etc/environment
+          echo "AWS_REGION=${AWS::Region}" >> /etc/profile
+          echo "AWS_REGION=${AWS::Region}" >> /etc/environment
+          # Install necessary packages
+          sudo apt-get update
+          sudo apt-get upgrade -y
+          sudo apt-get install -y git htop
+          # Clone the GitHub repository
+          cd /home/ubuntu/
+          git clone https://github.com/DO4AF/sota-watchtower.git
+          # Change ownership of the cloned repository to the 'ubuntu' user
+          sudo chown -R ubuntu:ubuntu /home/ubuntu/sota-watchtower
+          # Set permissions to 777 (note: this is very permissive, consider using 755 or 775 instead)
+          sudo chmod -R 777 /home/ubuntu/sota-watchtower
+          # Run the UserData script from the repository
+          cd /home/ubuntu/sota-watchtower/ec2/aprs-listener/
+          sudo chmod +x install.sh
+          ./install.sh
+      Tags:
+        - Key: Name
+          Value: SotaWatchtower-AprsMonitor
+  AprsMonitorSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and HTTP access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+  AprsMonitorInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref AprsMonitorInstanceRole
+  AprsMonitorInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EC2InvokeLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt ActivationZoneMonitorFunction.Arn
+  SotaWatchtowerMasterLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /sotawatchtower/MasterLogGroup
+      RetentionInDays: 90
+  SotaWatchtowerDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardBody:
+        Fn::Sub: |
+          {
+            "start": "-PT72H",
+            "widgets": [
+                {
+                    "height": 10,
+                    "width": 10,
+                    "y": 0,
+                    "x": 13,
+                    "type": "metric",
+                    "properties": {
+                        "metrics": [
+                            [ "AWS/Lambda", "Invocations", "FunctionName", "ActivationZoneMonitorFunction" ]
+                        ],
+                        "view": "timeSeries",
+                        "stacked": false,
+                        "region": "eu-central-1",
+                        "period": 3600,
+                        "stat": "Sum",
+                        "title": "Invocations",
+                        "annotations": {
+                            "horizontal": [
+                                [
+                                    {
+                                        "color": "#f89256",
+                                        "label": "Medium load",
+                                        "value": 200
+                                    },
+                                    {
+                                        "value": 400,
+                                        "label": "Medium load"
+                                    }
+                                ],
+                                {
+                                    "color": "#fe6e73",
+                                    "label": "High load",
+                                    "value": 400,
+                                    "fill": "above"
+                                }
+                            ]
+                        },
+                        "yAxis": {
+                            "left": {
+                                "min": 0,
+                                "label": ""
+                            }
+                        },
+                        "liveData": false
+                    }
+                },
+                {
+                    "height": 11,
+                    "width": 23,
+                    "y": 10,
+                    "x": 0,
+                    "type": "log",
+                    "properties": {
+                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message\n| sort @timestamp desc\n| limit 10000\n| filter @message like /\\QAPRS Callsign: \\E.*\\Q, APRS Latitude: \\E.*\\Q, APRS Longitude: \\E.*\\Q, APRS Altitude: \\E.*\\Q\n\\E/",
+                        "region": "eu-central-1",
+                        "stacked": false,
+                        "title": "APRS data stream",
+                        "view": "table"
+                    }
+                },
+                {
+                    "height": 7,
+                    "width": 6,
+                    "y": 0,
+                    "x": 0,
+                    "type": "metric",
+                    "properties": {
+                        "metrics": [
+                            [ "AWS/Lambda", "Invocations", "FunctionName", "ActivationZoneMonitorFunction" ]
+                        ],
+                        "view": "gauge",
+                        "region": "eu-central-1",
+                        "yAxis": {
+                            "left": {
+                                "min": 0,
+                                "max": 500
+                            }
+                        },
+                        "stat": "Sum",
+                        "period": 3600,
+                        "title": "Callsigns per hour",
+                        "annotations": {
+                            "horizontal": [
+                                {
+                                    "color": "#fe6e73",
+                                    "label": "High load",
+                                    "value": 400,
+                                    "fill": "above"
+                                },
+                                [
+                                    {
+                                        "color": "#f89256",
+                                        "label": "Medium load",
+                                        "value": 200
+                                    },
+                                    {
+                                        "value": 400,
+                                        "label": "Medium load"
+                                    }
+                                ]
+                            ]
+                        },
+                        "liveData": false,
+                        "singleValueFullPrecision": false
+                    }
+                },
+                {
+                    "height": 7,
+                    "width": 7,
+                    "y": 0,
+                    "x": 6,
+                    "type": "log",
+                    "properties": {
+                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message, @logStream, @log\n| sort @timestamp desc\n| limit 10000\n| filter @message like /\\QAPRS Callsign: \\E.*\\Q, APRS Latitude: \\E.*\\Q, APRS Longitude: \\E.*\\Q, APRS Altitude: \\E/\n| parse @message /\\QAPRS Callsign: \\E(?<callsign>[^,]+), APRS Latitude/\n| stats \n    count(if(callsign like /^D.*/, 1, null)) as D_Callsigns,\n    count(if(callsign like /^OE.*/, 1, null)) as OE_Callsigns,\n    count(if(!(callsign like /^D.*/ or callsign like /^OE.*/), 1, null)) as Other_Callsigns\n",
+                        "region": "eu-central-1",
+                        "stacked": false,
+                        "title": "Country",
+                        "view": "bar"
+                    }
+                },
+                {
+                    "height": 3,
+                    "width": 6,
+                    "y": 7,
+                    "x": 0,
+                    "type": "log",
+                    "properties": {
+                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message\n| parse @message /APRS Callsign: (?<callsign>[^\\s,]+), APRS Latitude: [^,]+, APRS Longitude: [^,]+, APRS Altitude: [^,]+/ \n| display @timestamp, callsign\n| sort @timestamp desc\n| limit 1\n| filter @message like /\\QAPRS Callsign: \\E.*\\Q, APRS Latitude: \\E.*\\Q, APRS Longitude: \\E.*\\Q, APRS Altitude: \\E.*\\Q\n\\E/",
+                        "region": "eu-central-1",
+                        "stacked": false,
+                        "title": "Last callsign",
+                        "view": "table"
+                    }
+                },
+                {
+                    "height": 3,
+                    "width": 7,
+                    "y": 7,
+                    "x": 6,
+                    "type": "alarm",
+                    "properties": {
+                        "title": "APRS Signal Health",
+                        "alarms": [
+                            "${AprsMonitorAlarm.Arn}"
+                        ]
+                    }
+                }
+            ]
+          }
+      DashboardName: SOTA-Watchtower-Dashboard
+  AprsMonitorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: APRS Signal alive
+      ActionsEnabled: true
+      OKActions: []
+      AlarmActions: []
+      InsufficientDataActions: []
+      MetricName: Invocations
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Dimensions:
+          - Name: FunctionName
+            Value: ActivationZoneMonitorFunction
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: LessThanOrEqualToThreshold
+      TreatMissingData: breaching
+
+
+Outputs:
+  ApiGatewayInvokeUrl:
+    Description: URL to enter into HamAlert Destination
+    Value: !Sub https://${HamAlertApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/notify
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiGatewayInvokeUrl
+  DashboardUrl:
+    Description: URL to the CloudWatch Dashboard
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards/dashboard/${SotaWatchtowerDashboard}
+    Export:
+      Name: !Sub ${AWS::StackName}-DashboardUrl
