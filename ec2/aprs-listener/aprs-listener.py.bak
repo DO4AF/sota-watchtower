@@ -41,7 +41,7 @@ def packet_handler(packet):
 # Create a client object and specify port 14580
 client = aprslib.IS("N0CALL", port=14580)
 # Set area filter to receive packets only from Austria and southern Germany
-client.set_filter("a/49.0/7.7/46.0/16.5")
+client.set_filter("a/48.6/9.0/46.0/16.5")
 
 # Create a Lambda client
 lambda_client = boto3.client('lambda', region_name='eu-central-1')
