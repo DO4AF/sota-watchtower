@@ -64,7 +64,7 @@ To get started with SOTA Watchtower, follow the steps below to set up the projec
 
 1. **Clone the repository:**
 	```bash
-	git clone https://gitlab.com/afruechtl/sota-watchtower.git
+	git clone https://github.com/DO4AF/sota-watchtower.git
 	cd sota-watchtower
 	```
 2. **Configure Triggers in HamAlert**
