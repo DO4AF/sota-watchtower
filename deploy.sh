@@ -43,15 +43,17 @@ OUTPUTS=$(aws cloudformation describe-stacks \
   --query "Stacks[0].Outputs" \
   --output json)
 
-API_URL=$(echo "$OUTPUTS"     | python3 -c "import sys,json; o={x['OutputKey']:x['OutputValue'] for x in json.load(sys.stdin)}; print(o.get('WatchtowerWebApiUrl',''))")
-WS_URL=$(echo "$OUTPUTS"      | python3 -c "import sys,json; o={x['OutputKey']:x['OutputValue'] for x in json.load(sys.stdin)}; print(o.get('WatchtowerWsApiUrl',''))")
-POOL_ID=$(echo "$OUTPUTS"     | python3 -c "import sys,json; o={x['OutputKey']:x['OutputValue'] for x in json.load(sys.stdin)}; print(o.get('CognitoUserPoolId',''))")
-CLIENT_ID=$(echo "$OUTPUTS"   | python3 -c "import sys,json; o={x['OutputKey']:x['OutputValue'] for x in json.load(sys.stdin)}; print(o.get('CognitoClientId',''))")
+API_URL=$(echo "$OUTPUTS"       | python3 -c "import sys,json; o={x['OutputKey']:x['OutputValue'] for x in json.load(sys.stdin)}; print(o.get('WatchtowerWebApiUrl',''))")
+WS_URL=$(echo "$OUTPUTS"        | python3 -c "import sys,json; o={x['OutputKey']:x['OutputValue'] for x in json.load(sys.stdin)}; print(o.get('WatchtowerWsApiUrl',''))")
+POOL_ID=$(echo "$OUTPUTS"       | python3 -c "import sys,json; o={x['OutputKey']:x['OutputValue'] for x in json.load(sys.stdin)}; print(o.get('CognitoUserPoolId',''))")
+CLIENT_ID=$(echo "$OUTPUTS"     | python3 -c "import sys,json; o={x['OutputKey']:x['OutputValue'] for x in json.load(sys.stdin)}; print(o.get('CognitoClientId',''))")
+SUMMITS_URL=$(echo "$OUTPUTS"   | python3 -c "import sys,json; o={x['OutputKey']:x['OutputValue'] for x in json.load(sys.stdin)}; print(o.get('SummitsBucketUrl',''))")
 
 echo "  API URL:          $API_URL"
 echo "  WebSocket URL:    $WS_URL"
 echo "  Cognito Pool ID:  $POOL_ID"
 echo "  Cognito Client:   $CLIENT_ID"
+echo "  Summits URL:      $SUMMITS_URL"
 
 echo ""
 echo "==> Syncing Amplify env vars (app: $AMPLIFY_APP_ID, branch: $AMPLIFY_BRANCH)..."
@@ -71,7 +73,8 @@ aws amplify update-app --app-id "$AMPLIFY_APP_ID" \
     \"ANGULAR_WS_URL\": \"$WS_URL\",
     \"ANGULAR_COGNITO_USER_POOL_ID\": \"$POOL_ID\",
     \"ANGULAR_COGNITO_CLIENT_ID\": \"$CLIENT_ID\",
-    \"ANGULAR_REGION\": \"$REGION\"
+    \"ANGULAR_REGION\": \"$REGION\",
+    \"ANGULAR_SUMMITS_URL\": \"$SUMMITS_URL\"
   }" \
   --query "app.environmentVariables" --output table
 
@@ -86,5 +89,26 @@ JOB_ID=$(aws amplify start-job \
 
 echo "    Build job started: #$JOB_ID"
 echo "    Watch at: https://$AMPLIFY_BRANCH.$AMPLIFY_APP_ID.amplifyapp.com"
+echo ""
+echo "==> Invoking RefreshSummitsFunction to populate SummitsTable..."
+REFRESH_FN=$(aws cloudformation describe-stack-resources \
+  --stack-name "$STACK_NAME" \
+  --region "$REGION" \
+  --query "StackResources[?LogicalResourceId=='RefreshSummitsFunction'].PhysicalResourceId" \
+  --output text 2>/dev/null || echo "")
+
+if [[ -n "$REFRESH_FN" ]]; then
+  aws lambda invoke \
+    --function-name "$REFRESH_FN" \
+    --region "$REGION" \
+    --payload '{}' \
+    /tmp/refresh-summits-out.json > /dev/null 2>&1 &
+  REFRESH_PID=$!
+  echo "    RefreshSummitsFunction invoked asynchronously (PID: $REFRESH_PID)"
+  echo "    This will take ~60s. Check /tmp/refresh-summits-out.json for result."
+else
+  echo "    WARNING: Could not find RefreshSummitsFunction — skipping summit population."
+fi
+
 echo ""
 echo "Done."

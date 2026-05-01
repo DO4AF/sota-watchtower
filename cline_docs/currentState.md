@@ -95,9 +95,14 @@ Walkers now correctly show green/yellow/orange/gray based on actual age.
 
 ## Infrastructure Notes
 - Stack: `sota-watchtower-stack` in `eu-central-1`
-- Amplify App ID: `d1e96ec1sckzck`
-- SummitsTable: `sota-watchtower-stack-SummitsTable-A0P6RDXP8QT3`
+- Amplify App ID: `d1e96ec1sckzck` (GitHub-connected, keep this)
+- API Gateway (Web): `https://qxocjpup19.execute-api.eu-central-1.amazonaws.com/Prod`
+- WebSocket: `wss://d24nsyrv72.execute-api.eu-central-1.amazonaws.com/Prod`
+- Cognito User Pool: `eu-central-1_HICITnIcX`
+- Cognito Client: `4qfqhh6sga89802nghhsc7bqae`
 - AprsPositionsTable: single PK=callsign, positions stored as list attribute (up to 100 track points)
+- SummitsTable: populated by RefreshSummitsFunction — must invoke manually after redeploy (daily cron at 02:00 UTC)
 - EC2 instance may be replaced/recreated by CloudFormation if UserData/AMI changes
 - The .env FREQUENCY_FILTER_PATTERN must be single-quoted
 - Always run `cd web && npx ng build --configuration production` before git push
+- After full stack redeploy: run `aws lambda invoke --function-name RefreshSummitsFunction ...` to re-populate SummitsTable

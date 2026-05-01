@@ -686,6 +686,33 @@ Resources:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup
 
+  # ─── S3 Bucket for static summit GeoJSON (public-read, CORS-enabled) ──────────
+  SummitsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET]
+            AllowedOrigins: ['*']
+            MaxAge: 86400
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  SummitsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SummitsBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub arn:aws:s3:::${SummitsBucket}/*
+
   RefreshSummitsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -708,9 +735,12 @@ Resources:
       Environment:
         Variables:
           SUMMITS_TABLE_NAME: !Ref SummitsTable
+          SUMMITS_BUCKET_NAME: !Ref SummitsBucket
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref SummitsTable
+        - S3WritePolicy:
+            BucketName: !Ref SummitsBucket
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup
@@ -1118,3 +1148,8 @@ Outputs:
     Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards/dashboard/${SotaWatchtowerDashboard}
     Export:
       Name: !Sub ${AWS::StackName}-DashboardUrl
+  SummitsBucketUrl:
+    Description: Public URL for the static worldwide summits GeoJSON file
+    Value: !Sub https://${SummitsBucket}.s3.${AWS::Region}.amazonaws.com/summits.json
+    Export:
+      Name: !Sub ${AWS::StackName}-SummitsBucketUrl

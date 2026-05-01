@@ -14,24 +14,29 @@ import { catchError, of } from 'rxjs';
 import { ApiService, AprsPosition } from '../../services/api.service';
 import { WebSocketService } from '../../services/websocket.service';
 import { EventLogService } from '../../services/event-log.service';
+import { environment } from '../../../environments/environment';
 
-// ─── Summit point colors — SOTLAS color scheme ───────────────────────────────
+// ─── Summit point colors — exact SOTLAS color scheme ────────────────────────
+// SOTA only assigns 1, 2, 4, 6, 8, 10 points (no odd increments 3/5/7/9).
+// Source: sotlas-frontend/src/assets/swisstopo.json  summits_circles layer.
 
 const SUMMIT_COLORS: Record<number, string> = {
-  1:  '#4CAF50',   // green
-  2:  '#8BC34A',   // light green
-  3:  '#CDDC39',   // lime
-  4:  '#FFEB3B',   // yellow
-  5:  '#FFC107',   // amber
-  6:  '#FF9800',   // orange
-  7:  '#FF5722',   // deep orange
-  8:  '#F44336',   // red
-  9:  '#E91E63',   // pink
-  10: '#9C27B0',   // purple
+  1:  '#4D7A20',   // dark olive green
+  2:  '#6DA536',   // medium green
+  4:  '#AEA727',   // yellow-green
+  6:  '#EFA818',   // amber
+  8:  '#DC5D04',   // dark orange
+  10: '#C8101E',   // red
 };
 
 function summitColor(pts: number): string {
-  return SUMMIT_COLORS[Math.max(1, Math.min(10, pts))] ?? '#aaa';
+  // Round up to the nearest valid SOTA point value
+  if (pts <= 1)  return SUMMIT_COLORS[1];
+  if (pts <= 2)  return SUMMIT_COLORS[2];
+  if (pts <= 4)  return SUMMIT_COLORS[4];
+  if (pts <= 6)  return SUMMIT_COLORS[6];
+  if (pts <= 8)  return SUMMIT_COLORS[8];
+  return SUMMIT_COLORS[10];
 }
 
 // ─── Activator freshness ─────────────────────────────────────────────────────
@@ -222,13 +227,32 @@ export class MapComponent implements OnInit, OnDestroy {
   // ─── Summits + alert glow ────────────────────────────────────────────────
 
   private loadSummits(): void {
+    // Fetch alerts (failures are tolerated — alerts are optional glow rings)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const alerts$ = this.api.getAlerts().pipe(catchError(() => of([] as any[])));
+
+    // Fetch summit GeoJSON: use S3 static file if env is set, else Lambda API
+    const summitsUrl = (environment as { summitsUrl?: string }).summitsUrl ?? '';
+
+    const loadGeojson = (): Promise<GeoJSON.FeatureCollection> => {
+      if (summitsUrl && !summitsUrl.startsWith('${')) {
+        // S3 path — browser decompresses gzip automatically via Content-Encoding header
+        return fetch(summitsUrl).then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status} fetching ${summitsUrl}`);
+          return r.json() as Promise<GeoJSON.FeatureCollection>;
+        });
+      }
+      return new Promise((resolve, reject) => {
+        this.api.getSummits().subscribe({ next: resolve, error: reject });
+      });
+    };
+
     forkJoin({
-      geojson: this.api.getSummits(),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      alerts:  this.api.getAlerts().pipe(catchError(() => of([] as any[]))),
+      alerts: alerts$ as any,
     }).subscribe({
-      next: ({ geojson, alerts }) => {
-        // Build the set of summit codes that have upcoming activations (today → +7 days)
+      next: ({ alerts }) => {
+        // Build the set of upcoming-alert summit codes
         const now       = Date.now();
         const sevenDays = 7 * 24 * 3_600_000;
         this.alertedSummits.clear();
@@ -242,37 +266,69 @@ export class MapComponent implements OnInit, OnDestroy {
           }
         });
 
-        // Parse all summit features into lightweight records
-        this.allSummits = [];
-        geojson.features.forEach(f => {
-          const props  = f.properties as Record<string, unknown>;
-          const coords = (f.geometry as GeoJSON.Point).coordinates;
-          const points = Number(props['points'] ?? 1);
+        // Load summit GeoJSON (may come from S3 or Lambda)
+        loadGeojson().then(geojson => {
+          this.allSummits = [];
+          geojson.features.forEach(f => {
+            const props  = f.properties as Record<string, unknown>;
+            const coords = (f.geometry as GeoJSON.Point).coordinates;
 
-          this.allSummits.push({
-            code:       String(props['summitCode']      ?? ''),
-            name:       String(props['peakName']        ?? ''),
-            elevationM: Number(props['elevationM']      ?? 0),
-            assoc:      String(props['associationName'] ?? ''),
-            region:     String(props['region']          ?? ''),
-            points,
-            color:      summitColor(points),
-            radius:     Math.round(5 + (points - 1) * 0.33),  // 1pt=5px, 10pt=8px
-            lat:        coords[1],
-            lon:        coords[0],
+            // S3 uses compact keys (c=code, n=name, e=elevation, p=points, a=assoc, r=region)
+            // Lambda API uses full keys (summitCode, peakName, elevationM, etc.)
+            const code   = String(props['c'] ?? props['summitCode']      ?? '');
+            const name   = String(props['n'] ?? props['peakName']        ?? '');
+            const elev   = Number(props['e'] ?? props['elevationM']      ?? 0);
+            const assoc  = String(props['a'] ?? props['associationName'] ?? '');
+            const region = String(props['r'] ?? props['region']          ?? '');
+            const points = Number(props['p'] ?? props['points']          ?? 1);
+
+            this.allSummits.push({
+              code, name, elevationM: elev, assoc, region, points,
+              color:  summitColor(points),
+              radius: Math.round(5 + (points - 1) * 0.33),   // 1pt=5px, 10pt=8px
+              lat:    coords[1],
+              lon:    coords[0],
+            });
           });
+
+          this.summitCount.set(this.allSummits.length);
+          this.loading.set(false);
+          this.eventLog.success('Summits', `Loaded ${this.allSummits.length} summits`);
+          this.updateViewport();
+        }).catch(err => {
+          this.eventLog.error('Summits', `Failed: ${err.message}`);
+          this.loading.set(false);
         });
-
-        this.summitCount.set(this.allSummits.length);
-        this.loading.set(false);
-        this.eventLog.success('Summits', `Loaded ${this.allSummits.length} summits`);
-
-        // Initial viewport render
-        this.updateViewport();
       },
-      error: err => {
-        this.eventLog.error('Summits', `Failed: ${err.message}`);
-        this.loading.set(false);
+      error: () => {
+        // Even if alerts fail, still load summits
+        loadGeojson().then(geojson => {
+          this.allSummits = [];
+          geojson.features.forEach(f => {
+            const props  = f.properties as Record<string, unknown>;
+            const coords = (f.geometry as GeoJSON.Point).coordinates;
+            const code   = String(props['c'] ?? props['summitCode']      ?? '');
+            const name   = String(props['n'] ?? props['peakName']        ?? '');
+            const elev   = Number(props['e'] ?? props['elevationM']      ?? 0);
+            const assoc  = String(props['a'] ?? props['associationName'] ?? '');
+            const region = String(props['r'] ?? props['region']          ?? '');
+            const points = Number(props['p'] ?? props['points']          ?? 1);
+            this.allSummits.push({
+              code, name, elevationM: elev, assoc, region, points,
+              color:  summitColor(points),
+              radius: Math.round(5 + (points - 1) * 0.33),
+              lat:    coords[1],
+              lon:    coords[0],
+            });
+          });
+          this.summitCount.set(this.allSummits.length);
+          this.loading.set(false);
+          this.eventLog.success('Summits', `Loaded ${this.allSummits.length} summits`);
+          this.updateViewport();
+        }).catch(err => {
+          this.eventLog.error('Summits', `Failed: ${err.message}`);
+          this.loading.set(false);
+        });
       },
     });
   }
