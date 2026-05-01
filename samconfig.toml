@@ -14,11 +14,6 @@ s3_prefix = "sota-watchtower-stack"
 region = "eu-central-1"
 capabilities = "CAPABILITY_IAM"
 image_repositories = []
-parameter_overrides =[
-	"TelegramBotToken=REDACTED_TELEGRAM_TOKEN",
-	"TelegramUserChatId=5861279366",
-	"TelegramGroupChatId=-1002179601871",
-	"FrequencyFilterPattern=\\b(145|433|2|70).*-.*\\b",
-	"AdminEmail=REDACTED_EMAIL",
-	"AdminPassword=REDACTED_PASSWORD"
-	]
+# Sensitive parameter overrides are read from .env by deploy.sh
+# See .env.example for required variables
+parameter_overrides = []

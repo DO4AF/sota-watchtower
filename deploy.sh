@@ -5,6 +5,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SAMCONFIG="$SCRIPT_DIR/samconfig.toml"
+ENV_FILE="$SCRIPT_DIR/.env"
+
+# Load sensitive parameters from .env
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "ERROR: $ENV_FILE not found. Copy .env.example to .env and fill in values."
+  exit 1
+fi
+set -a
+# shellcheck source=.env
+source "$ENV_FILE"
+set +a
 
 # Read Amplify config from samconfig.toml
 AMPLIFY_APP_ID=$(grep -A5 '^\[amplify\]' "$SAMCONFIG" | grep 'app_id' | sed 's/.*=\s*"\(.*\)"/\1/')
@@ -13,7 +24,15 @@ STACK_NAME=$(grep -A20 '^\[default\.deploy' "$SAMCONFIG" | grep 'stack_name' | s
 REGION=$(grep -A20 '^\[default\.deploy' "$SAMCONFIG" | grep 'region' | sed 's/.*=\s*"\(.*\)"/\1/')
 
 echo "==> Deploying SAM stack: $STACK_NAME"
-sam deploy "$@"
+sam deploy \
+  --parameter-overrides \
+    "TelegramBotToken=${TELEGRAM_BOT_TOKEN}" \
+    "TelegramUserChatId=${TELEGRAM_USER_CHAT_ID}" \
+    "TelegramGroupChatId=${TELEGRAM_GROUP_CHAT_ID}" \
+    "FrequencyFilterPattern=${FREQUENCY_FILTER_PATTERN}" \
+    "AdminEmail=${ADMIN_EMAIL}" \
+    "AdminPassword=${ADMIN_PASSWORD}" \
+  "$@"
 
 echo ""
 echo "==> Reading stack outputs..."
