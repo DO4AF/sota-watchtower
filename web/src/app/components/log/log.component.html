@@ -1,0 +1,46 @@
+<div class="log-page">
+  <div class="log-header">
+    <div>
+      <h2 class="log-header__title">Event Log</h2>
+      <p class="log-header__sub">Real-time events from map, APRS and WebSocket</p>
+    </div>
+    <p-button
+      label="Clear"
+      icon="pi pi-trash"
+      severity="secondary"
+      size="small"
+      (onClick)="clear()" />
+  </div>
+
+  <div class="log-body">
+    @if (eventLog.events().length === 0) {
+      <div class="log-empty">
+        <i class="pi pi-inbox log-empty__icon"></i>
+        <p>No events yet. Navigate to the map to start seeing data.</p>
+      </div>
+    } @else {
+      <table class="log-table">
+        <thead>
+          <tr>
+            <th class="col-time">Time</th>
+            <th class="col-sev">Level</th>
+            <th class="col-cat">Category</th>
+            <th class="col-msg">Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of eventLog.events(); track entry.id) {
+            <tr class="log-row" [class]="'log-row--' + entry.severity">
+              <td class="col-time">{{ formatTime(entry.timestamp) }}</td>
+              <td class="col-sev">
+                <p-tag [value]="entry.severity.toUpperCase()" [severity]="tagSeverity(entry.severity)" />
+              </td>
+              <td class="col-cat">{{ entry.category }}</td>
+              <td class="col-msg">{{ entry.message }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>

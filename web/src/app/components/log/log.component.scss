@@ -1,0 +1,108 @@
+.log-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--p-surface-900);
+  overflow: hidden;
+}
+
+.log-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 28px 16px;
+  border-bottom: 1px solid var(--p-surface-700);
+  flex-shrink: 0;
+
+  &__title {
+    margin: 0 0 4px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--p-text-color);
+  }
+
+  &__sub {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--p-text-muted-color);
+  }
+}
+
+.log-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.log-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: var(--p-text-muted-color);
+  font-size: 0.85rem;
+
+  &__icon {
+    font-size: 2.5rem;
+    opacity: 0.3;
+  }
+
+  p { margin: 0; }
+}
+
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+
+  thead tr {
+    position: sticky;
+    top: 0;
+    background: var(--p-surface-800);
+    z-index: 1;
+  }
+
+  th {
+    text-align: left;
+    padding: 8px 14px;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: var(--p-text-muted-color);
+    border-bottom: 1px solid var(--p-surface-700);
+  }
+}
+
+.log-row {
+  border-bottom: 1px solid var(--p-surface-800);
+  transition: background 0.1s;
+
+  &:hover {
+    background: var(--p-surface-800);
+  }
+
+  td {
+    padding: 5px 14px;
+    vertical-align: middle;
+  }
+
+  &--error td { color: var(--p-red-400, #f38ba8); }
+  &--warn td  { color: var(--p-yellow-400, #f9e2af); }
+  &--success td { color: var(--p-green-400, #a6e3a1); }
+  &--info td  { color: var(--p-text-color); }
+}
+
+.col-time {
+  width: 90px;
+  font-family: 'Courier New', monospace;
+  color: var(--p-text-muted-color) !important;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.col-sev  { width: 80px; }
+.col-cat  { width: 100px; font-weight: 600; }
+.col-msg  { font-family: 'Courier New', monospace; word-break: break-word; }

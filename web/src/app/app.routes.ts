@@ -2,7 +2,6 @@ import { Routes } from '@angular/router';
 import { authGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'map', pathMatch: 'full' },
   {
     path: 'login',
     loadComponent: () =>
@@ -10,25 +9,31 @@ export const routes: Routes = [
   },
   {
     path: 'map',
-    canActivate: [authGuard],
     loadComponent: () =>
       import('./components/map/map.component').then(m => m.MapComponent),
+    canActivate: [authGuard],
   },
   {
     path: 'alerts',
-    canActivate: [authGuard],
     loadComponent: () =>
-      import('./components/alerts/alerts.component').then(
-        m => m.AlertsComponent,
-      ),
+      import('./components/alerts/alerts.component').then(m => m.AlertsComponent),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'log',
+    loadComponent: () =>
+      import('./components/log/log.component').then(m => m.LogComponent),
+    canActivate: [authGuard],
   },
   {
     path: 'config',
-    canActivate: [authGuard],
     loadComponent: () =>
-      import('./components/config/config.component').then(
-        m => m.ConfigComponent,
-      ),
+      import('./components/config/config.component').then(m => m.ConfigComponent),
+    canActivate: [authGuard],
   },
-  { path: '**', redirectTo: 'map' },
+  {
+    path: '',
+    redirectTo: 'map',
+    pathMatch: 'full',
+  },
 ];

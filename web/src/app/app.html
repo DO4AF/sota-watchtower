@@ -1,33 +1,33 @@
 <div class="app-layout" [class.sidebar-collapsed]="sidebarCollapsed">
   <!-- Left Sidebar -->
   <aside class="sidebar">
-    <div class="sidebar__brand" (click)="toggleSidebar()">
-      <span class="sidebar__brand-icon">📡</span>
+    <button class="sidebar__brand" (click)="toggleSidebar()" title="Toggle sidebar">
+      <i class="pi pi-globe sidebar__brand-icon"></i>
       <span class="sidebar__brand-name">SOTA Watchtower</span>
-    </div>
+    </button>
 
     <nav class="sidebar__nav">
       <a routerLink="/map" routerLinkActive="active" class="sidebar__nav-item" title="Map">
-        <span class="sidebar__nav-icon">🗺️</span>
+        <i class="pi pi-map sidebar__nav-icon"></i>
         <span class="sidebar__nav-label">Map</span>
       </a>
       <a routerLink="/alerts" routerLinkActive="active" class="sidebar__nav-item" title="Alerts">
-        <span class="sidebar__nav-icon">🔔</span>
+        <i class="pi pi-bell sidebar__nav-icon"></i>
         <span class="sidebar__nav-label">Alerts</span>
       </a>
+      <a routerLink="/log" routerLinkActive="active" class="sidebar__nav-item" title="Event Log">
+        <i class="pi pi-list sidebar__nav-icon"></i>
+        <span class="sidebar__nav-label">Event Log</span>
+      </a>
       <a routerLink="/config" routerLinkActive="active" class="sidebar__nav-item" title="Config">
-        <span class="sidebar__nav-icon">⚙️</span>
+        <i class="pi pi-cog sidebar__nav-icon"></i>
         <span class="sidebar__nav-label">Config</span>
       </a>
     </nav>
 
     <div class="sidebar__footer">
-      <button class="sidebar__footer-btn" (click)="toggleTheme()" [title]="themeService.isDark() ? 'Switch to light mode' : 'Switch to dark mode'">
-        <span class="sidebar__nav-icon">{{ themeService.isDark() ? '☀️' : '🌙' }}</span>
-        <span class="sidebar__nav-label">{{ themeService.isDark() ? 'Light mode' : 'Dark mode' }}</span>
-      </button>
       <button class="sidebar__footer-btn" (click)="logout()" title="Sign out">
-        <span class="sidebar__nav-icon">🚪</span>
+        <i class="pi pi-sign-out sidebar__nav-icon"></i>
         <span class="sidebar__nav-label">Sign out</span>
       </button>
     </div>

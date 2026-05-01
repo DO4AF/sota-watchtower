@@ -9,61 +9,67 @@
   overflow: hidden;
 }
 
-// ─── Sidebar ────────────────────────────────────────────────────────────────
+// ─── Sidebar ─────────────────────────────────────────────────────────────────
+
+$sidebar-w: 220px;
+$sidebar-collapsed-w: 56px;
+$transition: 0.22s ease;
 
 .sidebar {
-  width: var(--sidebar-width, 240px);
-  min-width: var(--sidebar-width, 240px);
+  width: $sidebar-w;
+  min-width: $sidebar-w;
   height: 100vh;
-  background: var(--sidebar-bg, #0d1117);
-  border-right: 1px solid var(--surface-border, #30363d);
+  background: var(--p-surface-900);
+  border-right: 1px solid var(--p-surface-700);
   display: flex;
   flex-direction: column;
-  transition: width 0.25s ease, min-width 0.25s ease;
+  transition: width $transition, min-width $transition;
   overflow: hidden;
   z-index: 100;
   flex-shrink: 0;
 }
 
 .app-layout.sidebar-collapsed .sidebar {
-  width: var(--sidebar-collapsed-width, 64px);
-  min-width: var(--sidebar-collapsed-width, 64px);
+  width: $sidebar-collapsed-w;
+  min-width: $sidebar-collapsed-w;
 }
 
-// Brand / Logo
+// Brand button
 .sidebar__brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 16px;
+  gap: 10px;
+  padding: 0 16px;
+  height: 56px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--p-surface-700);
   cursor: pointer;
-  border-bottom: 1px solid var(--surface-border, #30363d);
   white-space: nowrap;
-  overflow: hidden;
-  user-select: none;
+  width: 100%;
+  text-align: left;
+  transition: background $transition;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--p-surface-800);
   }
 }
 
 .sidebar__brand-icon {
-  font-size: 1.5rem;
+  font-size: 1.1rem;
+  color: var(--p-primary-color);
   flex-shrink: 0;
-  width: 32px;
+  width: 24px;
   text-align: center;
 }
 
 .sidebar__brand-name {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 700;
-  background: linear-gradient(135deg, #58a6ff, #79c0ff);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--p-text-color);
   white-space: nowrap;
-  opacity: 1;
-  transition: opacity 0.2s ease;
+  letter-spacing: 0.02em;
+  transition: opacity $transition;
 }
 
 .app-layout.sidebar-collapsed .sidebar__brand-name,
@@ -74,91 +80,94 @@
   overflow: hidden;
 }
 
-// Nav
+// Nav items
 .sidebar__nav {
   flex: 1;
-  padding: 12px 8px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .sidebar__nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 6px;
   text-decoration: none;
-  color: var(--text-muted, #8b949e);
-  font-size: 0.9rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.85rem;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background $transition, color $transition;
 
   &:hover {
-    background: rgba(88, 166, 255, 0.08);
-    color: var(--text-color, #e6edf3);
+    background: var(--p-surface-800);
+    color: var(--p-text-color);
   }
 
   &.active {
-    background: rgba(88, 166, 255, 0.15);
-    color: #58a6ff;
+    background: var(--p-primary-50);
+    color: var(--p-primary-color);
+
+    .sidebar__nav-icon {
+      color: var(--p-primary-color);
+    }
   }
 }
 
 .sidebar__nav-icon {
-  font-size: 1.2rem;
+  font-size: 0.95rem;
   flex-shrink: 0;
-  width: 24px;
+  width: 18px;
   text-align: center;
+  color: inherit;
 }
 
 .sidebar__nav-label {
-  transition: opacity 0.2s ease;
+  transition: opacity $transition;
   white-space: nowrap;
 }
 
 // Footer
 .sidebar__footer {
-  padding: 12px 8px;
-  border-top: 1px solid var(--surface-border, #30363d);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  padding: 8px;
+  border-top: 1px solid var(--p-surface-700);
 }
 
 .sidebar__footer-btn {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 6px;
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-muted, #8b949e);
-  font-size: 0.9rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.85rem;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   width: 100%;
   text-align: left;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background $transition, color $transition;
 
   &:hover {
-    background: rgba(88, 166, 255, 0.08);
-    color: var(--text-color, #e6edf3);
+    background: var(--p-surface-800);
+    color: var(--p-text-color);
   }
 }
 
-// ─── Main Content ────────────────────────────────────────────────────────────
+// ─── Main Content ─────────────────────────────────────────────────────────────
 
 .main-content {
   flex: 1;
   height: 100vh;
-  overflow: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }

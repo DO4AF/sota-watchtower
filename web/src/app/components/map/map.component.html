@@ -1,106 +1,64 @@
 <div class="map-page">
-  <!-- Map Container -->
-  <div class="map-container" [class.log-open]="eventLog.visible()">
-    <!-- Map Toolbar -->
-    <div class="map-toolbar">
-      <div class="map-toolbar__stats">
-        <span class="stat-badge">
-          <span class="stat-badge__dot stat-badge__dot--summit"></span>
-          {{ summitCount() }} summits
-        </span>
-        <span class="stat-badge">
-          <span class="stat-badge__dot stat-badge__dot--walker"></span>
-          {{ walkerCount() }} walkers
-        </span>
-      </div>
-
-      <div class="map-toolbar__controls">
-        <label class="trace-control">
-          <span class="trace-control__label">Trace:</span>
-          <select class="trace-control__select"
-            [value]="traceDurationHours()"
-            (change)="traceDurationHours.set(+$any($event.target).value); onTraceDurationChange()">
-            <option value="0.5">30 min</option>
-            <option value="1">1 hour</option>
-            <option value="2">2 hours</option>
-            <option value="4">4 hours</option>
-            <option value="8">8 hours</option>
-            <option value="24">24 hours</option>
-          </select>
-        </label>
-
-        <button class="toolbar-btn" (click)="toggleLog()" [class.active]="eventLog.visible()">
-          📋 Log
-        </button>
-      </div>
+  <!-- Toolbar -->
+  <div class="map-toolbar">
+    <div class="map-toolbar__stats">
+      <span class="stat-chip">
+        <i class="pi pi-map-marker"></i>
+        {{ summitCount() }} summits
+      </span>
+      <span class="stat-chip">
+        <i class="pi pi-user"></i>
+        {{ walkerCount() }} walkers
+      </span>
     </div>
 
-    <!-- Loading overlay -->
+    <div class="map-toolbar__controls">
+      <label class="trace-control">
+        <span>Trace window:</span>
+        <select class="trace-select"
+          [value]="traceDurationHours()"
+          (change)="traceDurationHours.set(+$any($event.target).value); onTraceDurationChange()">
+          <option value="0.5">30 min</option>
+          <option value="1">1 hour</option>
+          <option value="2">2 hours</option>
+          <option value="4">4 hours</option>
+          <option value="8">8 hours</option>
+          <option value="24">24 hours</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <!-- Leaflet Map -->
+  <div class="map-wrap">
     @if (loading()) {
       <div class="map-loading">
-        <div class="map-loading__spinner"></div>
-        <span>Loading map data…</span>
+        <i class="pi pi-spin pi-spinner map-loading__icon"></i>
+        <span>Loading…</span>
       </div>
     }
 
-    <!-- Leaflet Map -->
     <div id="sota-map"
       leaflet
       [leafletOptions]="mapOptions"
       (leafletMapReady)="onMapReady($event)"
       class="leaflet-map">
     </div>
-
-    <!-- Map Legend -->
-    <div class="map-legend">
-      <div class="map-legend__title">Legend</div>
-      <div class="map-legend__item">
-        <span class="legend-dot" style="background:#00c853"></span> 1pt summit
-      </div>
-      <div class="map-legend__item">
-        <span class="legend-dot" style="background:#ffd600"></span> 4pt summit
-      </div>
-      <div class="map-legend__item">
-        <span class="legend-dot" style="background:#880e4f"></span> 10pt summit
-      </div>
-      <div class="map-legend__divider"></div>
-      <div class="map-legend__item">
-        <span class="legend-walker" style="color:#00e676">🚶</span> &lt;5min
-      </div>
-      <div class="map-legend__item">
-        <span class="legend-walker" style="color:#ffeb3b">🚶</span> 5-15min
-      </div>
-      <div class="map-legend__item">
-        <span class="legend-walker" style="color:#ff9800">🚶</span> 15-30min
-      </div>
-      <div class="map-legend__item">
-        <span class="legend-walker" style="color:#9e9e9e">🚶</span> &gt;30min
-      </div>
-    </div>
   </div>
 
-  <!-- Debug Log Panel -->
-  @if (eventLog.visible()) {
-    <div class="log-panel">
-      <div class="log-panel__header">
-        <span class="log-panel__title">📋 Event Log</span>
-        <div class="log-panel__actions">
-          <button class="log-btn" (click)="clearLog()">Clear</button>
-          <button class="log-btn log-btn--close" (click)="toggleLog()">✕</button>
-        </div>
-      </div>
-      <div class="log-panel__body">
-        @for (entry of eventLog.events(); track entry.id) {
-          <div class="log-entry" [class]="logSeverityClass(entry.severity)">
-            <span class="log-entry__time">{{ formatTime(entry.timestamp) }}</span>
-            <span class="log-entry__cat">{{ entry.category }}</span>
-            <span class="log-entry__msg">{{ entry.message }}</span>
-          </div>
-        }
-        @if (eventLog.events().length === 0) {
-          <div class="log-empty">No events yet</div>
-        }
-      </div>
+  <!-- Legend (bottom-right, absolute inside map-wrap) -->
+  <div class="map-legend">
+    <div class="map-legend__title">Summit Points</div>
+    <div class="map-legend__gradient"></div>
+    <div class="map-legend__labels">
+      <span>1pt</span>
+      <span>10pt</span>
     </div>
-  }
+    <div class="map-legend__divider"></div>
+    <div class="map-legend__title">Walkers</div>
+    <div class="map-legend__item"><span class="ldot" style="background:#00e676"></span>&lt; 5 min</div>
+    <div class="map-legend__item"><span class="ldot" style="background:#ffeb3b"></span>5–15 min</div>
+    <div class="map-legend__item"><span class="ldot" style="background:#ff9800"></span>15–30 min</div>
+    <div class="map-legend__item"><span class="ldot" style="background:#9e9e9e"></span>&gt; 30 min</div>
+  </div>
 </div>

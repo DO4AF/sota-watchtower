@@ -1,325 +1,197 @@
-@use 'primeicons/primeicons.css';
+// ─── Third-party CSS ─────────────────────────────────────────────────────────
+// PrimeNG 21 theme is injected by providePrimeNG() — no CSS import needed.
+// PrimeIcons and Leaflet need their CSS imported here.
+@import 'primeicons/primeicons.css';
+@import 'leaflet/dist/leaflet.css';
 
-// ── Google Fonts: Inter ──────────────────────────────────────────────────────
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+// ─── Reset & Base ────────────────────────────────────────────────────────────
 
-// ── CSS Custom Properties ────────────────────────────────────────────────────
-:root {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-
-  // Brand colours
-  --brand-primary:   #3b82f6;
-  --brand-secondary: #6366f1;
-  --brand-accent:    #06b6d4;
-
-  // Surface (light)
-  --surface-bg:      #f8fafc;
-  --surface-card:    #ffffff;
-  --surface-border:  #e2e8f0;
-  --text-primary:    #0f172a;
-  --text-secondary:  #475569;
-  --text-muted:      #94a3b8;
+*, *::before, *::after {
+  box-sizing: border-box;
 }
-
-// Dark-mode overrides (applied via .p-dark on <html>)
-.p-dark {
-  --surface-bg:      #0d1117;
-  --surface-card:    #161b22;
-  --surface-border:  #30363d;
-  --text-primary:    #e6edf3;
-  --text-secondary:  #8b949e;
-  --text-muted:      #484f58;
-}
-
-// ── Base reset ───────────────────────────────────────────────────────────────
-*, *::before, *::after { box-sizing: border-box; }
 
 html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  font-family: var(--font-sans);
+  width: 100%;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 14px;
-  line-height: 1.6;
-  background: var(--surface-bg);
-  color: var(--text-primary);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-// ── Scrollbar ────────────────────────────────────────────────────────────────
+// ─── Scrollbar Styling ───────────────────────────────────────────────────────
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--surface-border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+::-webkit-scrollbar-track { background: var(--p-surface-800, #1e1e2e); }
+::-webkit-scrollbar-thumb {
+  background: var(--p-surface-600, #45475a);
+  border-radius: 3px;
+  &:hover { background: var(--p-surface-500, #585b70); }
+}
 
-// ── PrimeNG overrides ────────────────────────────────────────────────────────
+// ─── Leaflet Map overrides ────────────────────────────────────────────────────
 
-// Toolbar / navbar
-.sota-navbar.p-toolbar {
-  background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
-  border: none;
-  border-bottom: 1px solid #30363d;
-  padding: 0 1.5rem;
-  height: 56px;
-  box-shadow: 0 1px 12px rgba(0,0,0,0.4);
-  border-radius: 0;
+.leaflet-container {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #0d1117;
+}
 
-  .sota-brand {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    text-decoration: none;
-    color: #e6edf3;
-    font-size: 1.05rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+.leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.7) !important;
+  color: var(--p-text-muted-color, #888) !important;
+  font-size: 10px !important;
+}
 
-    .sota-brand__icon {
-      font-size: 1.3rem;
-    }
+.leaflet-control-zoom a {
+  background: var(--p-surface-800, #1e1e2e) !important;
+  color: var(--p-text-color, #cdd6f4) !important;
+  border-color: var(--p-surface-600, #45475a) !important;
 
-    .sota-brand__name {
-      background: linear-gradient(90deg, #63b3ed, #9f7aea);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-  }
-
-  .sota-nav {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-
-    a {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      padding: 0.4rem 0.85rem;
-      border-radius: 6px;
-      text-decoration: none;
-      color: #8b949e;
-      font-size: 0.875rem;
-      font-weight: 500;
-      transition: background 0.15s, color 0.15s;
-
-      &:hover {
-        background: rgba(255,255,255,0.06);
-        color: #e6edf3;
-      }
-
-      &.active {
-        background: rgba(59, 130, 246, 0.15);
-        color: #63b3ed;
-      }
-    }
-  }
-
-  .sota-toolbar-end {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+  &:hover {
+    background: var(--p-surface-700, #313244) !important;
+    color: var(--p-primary-color, #89b4fa) !important;
   }
 }
 
-// Cards
-.p-card {
-  background: var(--surface-card) !important;
-  border: 1px solid var(--surface-border) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08) !important;
+// ─── Popup / Tooltip ─────────────────────────────────────────────────────────
 
-  .p-dark & {
-    box-shadow: 0 2px 12px rgba(0,0,0,0.3) !important;
-  }
+.sota-popup-wrap .leaflet-popup-content-wrapper {
+  background: var(--p-surface-800, #1e1e2e) !important;
+  border: 1px solid var(--p-surface-600, #45475a) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+  color: var(--p-text-color, #cdd6f4) !important;
+  padding: 0 !important;
 }
 
-// Tables
-.p-datatable {
-  .p-datatable-header {
-    background: var(--surface-card);
-    border-color: var(--surface-border);
-    font-weight: 600;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-muted);
-  }
-
-  .p-datatable-thead > tr > th {
-    background: var(--surface-card);
-    border-color: var(--surface-border);
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 0.75rem 1rem;
-  }
-
-  .p-datatable-tbody > tr {
-    background: var(--surface-card);
-    border-color: var(--surface-border);
-    transition: background 0.1s;
-
-    > td {
-      border-color: var(--surface-border);
-      padding: 0.65rem 1rem;
-      font-size: 0.875rem;
-      color: var(--text-primary);
-    }
-
-    &:hover > td {
-      background: rgba(59, 130, 246, 0.05);
-    }
-
-    &.p-row-odd > td {
-      background: rgba(0,0,0,0.02);
-      .p-dark & { background: rgba(255,255,255,0.02); }
-    }
-  }
+.sota-popup-wrap .leaflet-popup-tip-container {
+  display: none !important;
 }
 
-// Tags
-.p-tag {
-  font-size: 0.7rem !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.04em !important;
-  border-radius: 4px !important;
-  padding: 0.2rem 0.55rem !important;
+.sota-popup-wrap .leaflet-popup-content {
+  margin: 0 !important;
+  width: auto !important;
 }
 
-// Buttons
-.p-button {
-  font-weight: 600 !important;
-  letter-spacing: 0.01em !important;
-  border-radius: 8px !important;
-  transition: all 0.15s ease !important;
-
-  &:not(.p-button-text):not(.p-button-outlined):not(.p-button-link) {
-    box-shadow: 0 1px 4px rgba(0,0,0,0.2) !important;
-  }
-}
-
-// Inputs
-.p-inputtext {
-  border-radius: 8px !important;
-  font-family: var(--font-sans) !important;
-  font-size: 0.875rem !important;
-}
-
-// Tabs
-.p-tabs {
-  .p-tablist {
-    background: var(--surface-card);
-    border-color: var(--surface-border);
-  }
-
-  .p-tab {
-    font-weight: 500;
-    font-size: 0.875rem;
-  }
-}
-
-// ── Leaflet cluster overrides ────────────────────────────────────────────────
-.marker-cluster-small,
-.marker-cluster-medium,
-.marker-cluster-large {
-  background-clip: padding-box;
-  border-radius: 50%;
-}
-
-.marker-cluster-small {
-  background-color: rgba(74, 85, 104, 0.7);
-  div { background-color: rgba(74, 85, 104, 0.9); }
-}
-
-.marker-cluster-medium {
-  background-color: rgba(221, 107, 32, 0.7);
-  div { background-color: rgba(221, 107, 32, 0.9); }
-}
-
-.marker-cluster-large {
-  background-color: rgba(229, 62, 62, 0.7);
-  div { background-color: rgba(229, 62, 62, 0.9); }
-}
-
-.marker-cluster div {
-  width: 30px;
-  height: 30px;
-  margin-left: 5px;
-  margin-top: 5px;
-  text-align: center;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 700;
-  color: #fff;
-  line-height: 30px;
-}
-
-// ── Leaflet popup global overrides ───────────────────────────────────────────
 .sota-popup {
-  .leaflet-popup-content-wrapper {
-    background: #1a202c;
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    padding: 0;
-    overflow: hidden;
-  }
-
-  .leaflet-popup-content {
-    margin: 0;
-  }
-
-  .leaflet-popup-tip {
-    background: #1a202c;
-  }
-
-  .leaflet-popup-close-button {
-    color: #8b949e !important;
-    font-size: 18px !important;
-    top: 6px !important;
-    right: 8px !important;
-  }
-}
-
-.map-popup {
-  padding: 12px 16px;
-  min-width: 160px;
+  padding: 14px 16px;
+  min-width: 210px;
 
   &__title {
-    font-size: 14px;
+    font-size: 0.85rem;
     font-weight: 700;
-    color: #e2e8f0;
-    margin-bottom: 2px;
-  }
-
-  &__code {
-    font-size: 11px;
-    color: #63b3ed;
-    font-weight: 600;
+    color: var(--p-primary-color, #89b4fa);
+    margin-bottom: 10px;
+    font-family: 'Courier New', monospace;
     letter-spacing: 0.05em;
-    margin-bottom: 6px;
   }
 
-  &__meta {
+  &__subtitle {
+    font-size: 0.78rem;
+    color: var(--p-text-muted-color, #888);
+    margin-bottom: 8px;
+  }
+
+  &__row {
     display: flex;
-    gap: 10px;
-    font-size: 12px;
-    color: #a0aec0;
+    justify-content: space-between;
+    gap: 20px;
+    font-size: 0.78rem;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--p-surface-700, #313244);
+
+    &:last-child { border-bottom: none; }
+
+    span:first-child {
+      color: var(--p-text-muted-color, #888);
+      white-space: nowrap;
+    }
+    span:last-child {
+      color: var(--p-text-color, #cdd6f4);
+      font-family: 'Courier New', monospace;
+      text-align: right;
+    }
   }
 }
 
-// ── Utility ──────────────────────────────────────────────────────────────────
-.sota-main {
-  height: calc(100dvh - 56px);
-  overflow: hidden;
+.sota-tooltip {
+  background: var(--p-surface-800, #1e1e2e) !important;
+  border: 1px solid var(--p-surface-600, #45475a) !important;
+  color: var(--p-text-color, #cdd6f4) !important;
+  border-radius: 6px !important;
+  font-size: 0.75rem !important;
+  padding: 5px 10px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
 }
 
-.page-content {
-  padding: 1.5rem;
-  height: 100%;
-  overflow-y: auto;
+// ─── Walker Markers (injected into Leaflet DOM) ───────────────────────────────
+
+.walker-marker {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &__dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 0 6px currentColor;
+  }
+
+  &__label {
+    position: absolute;
+    bottom: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    color: #fff;
+    white-space: nowrap;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 1);
+    letter-spacing: 0.04em;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 1px 3px;
+    border-radius: 2px;
+  }
+}
+
+.walker-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid;
+  animation: walker-pulse 2s ease-out infinite;
+  z-index: 1;
+}
+
+@keyframes walker-pulse {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+}
+
+// ─── PrimeNG global overrides ─────────────────────────────────────────────────
+
+.p-datatable .p-datatable-thead > tr > th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.p-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
