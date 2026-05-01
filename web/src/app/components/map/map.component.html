@@ -1,21 +1,35 @@
 <div class="map-container">
   @if (loading()) {
-    <div class="map-loading">Loading summits…</div>
+    <div class="map-loading">
+      <i class="pi pi-spin pi-spinner"></i>
+      <span>Loading summits…</span>
+    </div>
   }
-
   <div
     leaflet
+    class="map-view"
     [leafletOptions]="mapOptions"
     [leafletMarkerCluster]="markers"
     [leafletMarkerClusterOptions]="clusterOptions"
-    class="sota-map"
+    (leafletMapReady)="onMapReady($event)"
   ></div>
 
   <div class="map-legend">
-    <p-card>
-      <div class="legend-row"><span class="summit-marker summit-marker--default">▲</span> Summit</div>
-      <div class="legend-row"><span class="summit-marker summit-marker--alert">▲</span> Active alert</div>
-      <div class="legend-row"><span class="summit-marker summit-marker--notified">★</span> Confirmed on summit</div>
-    </p-card>
+    <div class="map-legend__item">
+      <span class="summit-marker summit-marker--default summit-marker--sm">▲</span>
+      <span>Summit</span>
+    </div>
+    <div class="map-legend__item">
+      <span class="summit-marker summit-marker--alert summit-marker--sm">▲</span>
+      <span>Alert</span>
+    </div>
+    <div class="map-legend__item">
+      <span class="summit-marker summit-marker--notified summit-marker--sm">★</span>
+      <span>On summit</span>
+    </div>
+    <div class="map-legend__item">
+      <span class="walker-legend">🚶</span>
+      <span>APRS walker</span>
+    </div>
   </div>
 </div>

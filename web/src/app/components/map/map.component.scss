@@ -1,41 +1,197 @@
 .map-container {
   position: relative;
-  height: 100%;
   width: 100%;
+  height: 100%;
 }
 
-.sota-map {
-  height: 100%;
+.map-view {
   width: 100%;
+  height: 100%;
 }
 
 .map-loading {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 500;
-  background: var(--p-surface-card);
-  padding: 0.75rem 1.25rem;
-  border-radius: 8px;
-  box-shadow: var(--p-overlay-modal-shadow);
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+
+  i { font-size: 1.5rem; }
 }
 
-.map-legend {
-  position: absolute;
-  bottom: 2rem;
-  right: 1rem;
-  z-index: 500;
-  min-width: 180px;
+// ── Summit markers ──────────────────────────────────────────────────────────
+.summit-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
 
-  .legend-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.2rem 0;
-    font-size: 0.875rem;
+  &:hover { transform: scale(1.2); }
+
+  &--default {
+    width: 22px;
+    height: 22px;
+    font-size: 13px;
+    background: #4a5568;
+    color: #e2e8f0;
+    border: 2px solid #718096;
+  }
+
+  &--alert {
+    width: 30px;
+    height: 30px;
+    font-size: 17px;
+    background: #dd6b20;
+    color: #fff;
+    border: 2px solid #f6ad55;
+    box-shadow: 0 0 12px rgba(221, 107, 32, 0.7);
+    animation: pulse-alert 2s infinite;
+  }
+
+  &--notified {
+    width: 34px;
+    height: 34px;
+    font-size: 20px;
+    background: #276749;
+    color: #9ae6b4;
+    border: 2px solid #48bb78;
+    box-shadow: 0 0 14px rgba(72, 187, 120, 0.7);
+    animation: pulse-notified 2s infinite;
+  }
+
+  &--sm {
+    width: 18px !important;
+    height: 18px !important;
+    font-size: 11px !important;
+    box-shadow: none !important;
+    animation: none !important;
   }
 }
 
-// Summit marker styles are defined globally in styles.scss
-// (Angular component encapsulation doesn't apply to dynamically injected divIcon HTML)
+@keyframes pulse-alert {
+  0%, 100% { box-shadow: 0 0 8px rgba(221, 107, 32, 0.6); }
+  50%       { box-shadow: 0 0 18px rgba(221, 107, 32, 0.9); }
+}
+
+@keyframes pulse-notified {
+  0%, 100% { box-shadow: 0 0 8px rgba(72, 187, 120, 0.6); }
+  50%       { box-shadow: 0 0 18px rgba(72, 187, 120, 0.9); }
+}
+
+// ── Walker markers ──────────────────────────────────────────────────────────
+.walker-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  cursor: pointer;
+
+  .walker-icon {
+    font-size: 22px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+    animation: walker-bounce 1.5s ease-in-out infinite;
+  }
+
+  .walker-label {
+    background: rgba(99, 179, 237, 0.9);
+    color: #1a202c;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+}
+
+@keyframes walker-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-3px); }
+}
+
+.walker-legend {
+  font-size: 16px;
+}
+
+// ── Map legend ──────────────────────────────────────────────────────────────
+.map-legend {
+  position: absolute;
+  bottom: 28px;
+  right: 10px;
+  z-index: 1000;
+  background: rgba(15, 20, 30, 0.88);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #cbd5e0;
+    font-weight: 500;
+  }
+}
+
+// ── Popup styles (global, injected via Leaflet) ─────────────────────────────
+:global(.sota-popup .leaflet-popup-content-wrapper) {
+  background: #1a202c;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  padding: 0;
+}
+
+:global(.sota-popup .leaflet-popup-content) {
+  margin: 0;
+}
+
+:global(.sota-popup .leaflet-popup-tip) {
+  background: #1a202c;
+}
+
+:global(.map-popup) {
+  padding: 12px 16px;
+  min-width: 160px;
+
+  .map-popup__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin-bottom: 2px;
+  }
+
+  .map-popup__code {
+    font-size: 11px;
+    color: #63b3ed;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+
+  .map-popup__meta {
+    display: flex;
+    gap: 10px;
+    font-size: 12px;
+    color: #a0aec0;
+  }
+}

@@ -1,38 +1,325 @@
-@import 'primeicons/primeicons.css';
+@use 'primeicons/primeicons.css';
 
-* {
-  box-sizing: border-box;
+// ── Google Fonts: Inter ──────────────────────────────────────────────────────
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+// ── CSS Custom Properties ────────────────────────────────────────────────────
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  // Brand colours
+  --brand-primary:   #3b82f6;
+  --brand-secondary: #6366f1;
+  --brand-accent:    #06b6d4;
+
+  // Surface (light)
+  --surface-bg:      #f8fafc;
+  --surface-card:    #ffffff;
+  --surface-border:  #e2e8f0;
+  --text-primary:    #0f172a;
+  --text-secondary:  #475569;
+  --text-muted:      #94a3b8;
 }
 
-html,
-body {
+// Dark-mode overrides (applied via .p-dark on <html>)
+.p-dark {
+  --surface-bg:      #0d1117;
+  --surface-card:    #161b22;
+  --surface-border:  #30363d;
+  --text-primary:    #e6edf3;
+  --text-secondary:  #8b949e;
+  --text-muted:      #484f58;
+}
+
+// ── Base reset ───────────────────────────────────────────────────────────────
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  font-family: var(--p-font-family);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  background: var(--surface-bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-// ─── Summit map marker styles ─────────────────────────────────────────────────
-// Injected as Leaflet divIcon HTML — component style encapsulation doesn't apply
-.summit-marker {
-  font-size: 14px;
-  line-height: 1;
-  text-shadow: 0 0 3px #fff;
-  display: inline-block;
+// ── Scrollbar ────────────────────────────────────────────────────────────────
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-  &--default {
-    color: #555;
+// ── PrimeNG overrides ────────────────────────────────────────────────────────
+
+// Toolbar / navbar
+.sota-navbar.p-toolbar {
+  background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+  border: none;
+  border-bottom: 1px solid #30363d;
+  padding: 0 1.5rem;
+  height: 56px;
+  box-shadow: 0 1px 12px rgba(0,0,0,0.4);
+  border-radius: 0;
+
+  .sota-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    text-decoration: none;
+    color: #e6edf3;
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+
+    .sota-brand__icon {
+      font-size: 1.3rem;
+    }
+
+    .sota-brand__name {
+      background: linear-gradient(90deg, #63b3ed, #9f7aea);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
   }
 
-  &--alert {
-    color: #e67e22;
-    font-size: 18px;
-    text-shadow: 0 0 4px rgba(230, 126, 34, 0.5);
+  .sota-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+
+    a {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.85rem;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #8b949e;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: background 0.15s, color 0.15s;
+
+      &:hover {
+        background: rgba(255,255,255,0.06);
+        color: #e6edf3;
+      }
+
+      &.active {
+        background: rgba(59, 130, 246, 0.15);
+        color: #63b3ed;
+      }
+    }
   }
 
-  &--notified {
-    color: #27ae60;
-    font-size: 22px;
-    text-shadow: 0 0 4px rgba(39, 174, 96, 0.5);
+  .sota-toolbar-end {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
+}
+
+// Cards
+.p-card {
+  background: var(--surface-card) !important;
+  border: 1px solid var(--surface-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08) !important;
+
+  .p-dark & {
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3) !important;
+  }
+}
+
+// Tables
+.p-datatable {
+  .p-datatable-header {
+    background: var(--surface-card);
+    border-color: var(--surface-border);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+
+  .p-datatable-thead > tr > th {
+    background: var(--surface-card);
+    border-color: var(--surface-border);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.75rem 1rem;
+  }
+
+  .p-datatable-tbody > tr {
+    background: var(--surface-card);
+    border-color: var(--surface-border);
+    transition: background 0.1s;
+
+    > td {
+      border-color: var(--surface-border);
+      padding: 0.65rem 1rem;
+      font-size: 0.875rem;
+      color: var(--text-primary);
+    }
+
+    &:hover > td {
+      background: rgba(59, 130, 246, 0.05);
+    }
+
+    &.p-row-odd > td {
+      background: rgba(0,0,0,0.02);
+      .p-dark & { background: rgba(255,255,255,0.02); }
+    }
+  }
+}
+
+// Tags
+.p-tag {
+  font-size: 0.7rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+  border-radius: 4px !important;
+  padding: 0.2rem 0.55rem !important;
+}
+
+// Buttons
+.p-button {
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+  border-radius: 8px !important;
+  transition: all 0.15s ease !important;
+
+  &:not(.p-button-text):not(.p-button-outlined):not(.p-button-link) {
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2) !important;
+  }
+}
+
+// Inputs
+.p-inputtext {
+  border-radius: 8px !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+}
+
+// Tabs
+.p-tabs {
+  .p-tablist {
+    background: var(--surface-card);
+    border-color: var(--surface-border);
+  }
+
+  .p-tab {
+    font-weight: 500;
+    font-size: 0.875rem;
+  }
+}
+
+// ── Leaflet cluster overrides ────────────────────────────────────────────────
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+  background-clip: padding-box;
+  border-radius: 50%;
+}
+
+.marker-cluster-small {
+  background-color: rgba(74, 85, 104, 0.7);
+  div { background-color: rgba(74, 85, 104, 0.9); }
+}
+
+.marker-cluster-medium {
+  background-color: rgba(221, 107, 32, 0.7);
+  div { background-color: rgba(221, 107, 32, 0.9); }
+}
+
+.marker-cluster-large {
+  background-color: rgba(229, 62, 62, 0.7);
+  div { background-color: rgba(229, 62, 62, 0.9); }
+}
+
+.marker-cluster div {
+  width: 30px;
+  height: 30px;
+  margin-left: 5px;
+  margin-top: 5px;
+  text-align: center;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 30px;
+}
+
+// ── Leaflet popup global overrides ───────────────────────────────────────────
+.sota-popup {
+  .leaflet-popup-content-wrapper {
+    background: #1a202c;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .leaflet-popup-content {
+    margin: 0;
+  }
+
+  .leaflet-popup-tip {
+    background: #1a202c;
+  }
+
+  .leaflet-popup-close-button {
+    color: #8b949e !important;
+    font-size: 18px !important;
+    top: 6px !important;
+    right: 8px !important;
+  }
+}
+
+.map-popup {
+  padding: 12px 16px;
+  min-width: 160px;
+
+  &__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin-bottom: 2px;
+  }
+
+  &__code {
+    font-size: 11px;
+    color: #63b3ed;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+
+  &__meta {
+    display: flex;
+    gap: 10px;
+    font-size: 12px;
+    color: #a0aec0;
+  }
+}
+
+// ── Utility ──────────────────────────────────────────────────────────────────
+.sota-main {
+  height: calc(100dvh - 56px);
+  overflow: hidden;
+}
+
+.page-content {
+  padding: 1.5rem;
+  height: 100%;
+  overflow-y: auto;
 }

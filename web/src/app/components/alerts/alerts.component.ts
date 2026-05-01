@@ -1,8 +1,9 @@
 import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TabsModule } from 'primeng/tabs';
+import { BadgeModule } from 'primeng/badge';
 import { interval, Subscription } from 'rxjs';
 import { ApiService, SotaAlert, SotaSpot } from '../../services/api.service';
 import { WebSocketService } from '../../services/websocket.service';
@@ -10,7 +11,7 @@ import { WebSocketService } from '../../services/websocket.service';
 @Component({
   selector: 'app-alerts',
   standalone: true,
-  imports: [CommonModule, TableModule, TagModule, TabsModule],
+  imports: [CommonModule, DatePipe, TableModule, TagModule, TabsModule, BadgeModule],
   templateUrl: './alerts.component.html',
   styleUrl: './alerts.component.scss',
 })

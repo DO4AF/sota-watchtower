@@ -1,78 +1,103 @@
 <div class="alerts-page">
-  <p-tabs value="alerts">
-    <p-tablist>
-      <p-tab value="alerts">Alerts</p-tab>
-      <p-tab value="spots">Live Spots (auto-refresh 30s)</p-tab>
-    </p-tablist>
+  <div class="alerts-header">
+    <h2>Alerts &amp; Spots</h2>
+    <p>Real-time SOTA activations and recent spots</p>
+  </div>
 
-    <p-tabpanels>
-      <p-tabpanel value="alerts">
-        <p-table
-          [value]="alerts()"
-          [loading]="alertsLoading()"
-          [tableStyle]="{ 'min-width': '40rem' }"
-          stripedRows
-          [paginator]="true"
-          [rows]="25"
-        >
-          <ng-template #header>
-            <tr>
-              <th>Callsign</th>
-              <th>Summit</th>
-              <th>Status</th>
-            </tr>
-          </ng-template>
-          <ng-template #body let-alert>
-            <tr>
-              <td><strong>{{ alert.callsign }}</strong></td>
-              <td>{{ alert.summit }}</td>
-              <td>
-                @if (alert.notified) {
-                  <p-tag severity="success" value="On summit" icon="pi pi-star" />
-                } @else {
-                  <p-tag severity="warn" value="Planned" icon="pi pi-clock" />
-                }
-              </td>
-            </tr>
-          </ng-template>
-          <ng-template #emptymessage>
-            <tr><td colspan="3">No alerts today.</td></tr>
-          </ng-template>
-        </p-table>
-      </p-tabpanel>
+  <div class="alerts-card">
+    <p-tabs value="0">
+      <p-tablist>
+        <p-tab value="0">
+          <i class="pi pi-bell"></i>&nbsp; Alerts
+          @if (alerts().length) {
+            <p-badge [value]="alerts().length.toString()" severity="warn" styleClass="ml-1" />
+          }
+        </p-tab>
+        <p-tab value="1">
+          <i class="pi pi-wifi"></i>&nbsp; Live Spots
+          <span class="text-xs text-muted ml-1">(auto-refresh 30s)</span>
+        </p-tab>
+      </p-tablist>
 
-      <p-tabpanel value="spots">
-        <p-table
-          [value]="spots()"
-          [loading]="spotsLoading()"
-          [tableStyle]="{ 'min-width': '40rem' }"
-          stripedRows
-          [paginator]="true"
-          [rows]="25"
-        >
-          <ng-template #header>
-            <tr>
-              <th>Activator</th>
-              <th>Summit</th>
-              <th>Frequency</th>
-              <th>Mode</th>
-              <th>Time (UTC)</th>
-            </tr>
-          </ng-template>
-          <ng-template #body let-spot>
-            <tr>
-              <td><strong>{{ spot.activatorCallsign }}</strong></td>
-              <td>{{ spot.summitCode }}</td>
-              <td>{{ spot.frequency }}</td>
-              <td>{{ spot.mode }}</td>
-              <td>{{ spot.timeStamp | date: 'HH:mm' : 'UTC' }}</td>
-            </tr>
-          </ng-template>
-          <ng-template #emptymessage>
-            <tr><td colspan="5">No spots in the last hour.</td></tr>
-          </ng-template>
-        </p-table>
-      </p-tabpanel>
-    </p-tabpanels>
-  </p-tabs>
+      <p-tabpanels>
+        <!-- Alerts tab -->
+        <p-tabpanel value="0">
+          <p-table
+            [value]="alerts()"
+            [loading]="alertsLoading()"
+            [paginator]="true"
+            [rows]="25"
+            [rowsPerPageOptions]="[10, 25, 50]"
+            [rowHover]="true"
+            [stripedRows]="true"
+            styleClass="p-datatable-sm"
+          >
+            <ng-template #header>
+              <tr>
+                <th>Callsign</th>
+                <th>Summit</th>
+                <th>Status</th>
+              </tr>
+            </ng-template>
+            <ng-template #body let-alert>
+              <tr>
+                <td><span class="callsign-cell">{{ alert.callsign }}</span></td>
+                <td><span class="summit-cell">{{ alert.summit }}</span></td>
+                <td>
+                  @if (alert.notified) {
+                    <p-tag value="On summit" severity="success" icon="pi pi-map-marker" />
+                  } @else {
+                    <p-tag value="Planned" severity="warn" icon="pi pi-clock" />
+                  }
+                </td>
+              </tr>
+            </ng-template>
+            <ng-template #emptymessage>
+              <tr>
+                <td colspan="3" class="text-center py-4 text-muted">No active alerts</td>
+              </tr>
+            </ng-template>
+          </p-table>
+        </p-tabpanel>
+
+        <!-- Spots tab -->
+        <p-tabpanel value="1">
+          <p-table
+            [value]="spots()"
+            [loading]="spotsLoading()"
+            [paginator]="true"
+            [rows]="25"
+            [rowsPerPageOptions]="[10, 25, 50]"
+            [rowHover]="true"
+            [stripedRows]="true"
+            styleClass="p-datatable-sm"
+          >
+            <ng-template #header>
+              <tr>
+                <th>Activator</th>
+                <th>Summit</th>
+                <th>Frequency</th>
+                <th>Mode</th>
+                <th>Time (UTC)</th>
+              </tr>
+            </ng-template>
+            <ng-template #body let-spot>
+              <tr>
+                <td><span class="callsign-cell">{{ spot.activatorCallsign }}</span></td>
+                <td><span class="summit-cell">{{ spot.summitCode }}</span></td>
+                <td><span class="freq-cell">{{ spot.frequency }} MHz</span></td>
+                <td><span class="freq-cell">{{ spot.mode }}</span></td>
+                <td><span class="time-cell">{{ spot.timeStamp | date:'HH:mm':'UTC' }}</span></td>
+              </tr>
+            </ng-template>
+            <ng-template #emptymessage>
+              <tr>
+                <td colspan="5" class="text-center py-4 text-muted">No recent spots</td>
+              </tr>
+            </ng-template>
+          </p-table>
+        </p-tabpanel>
+      </p-tabpanels>
+    </p-tabs>
+  </div>
 </div>

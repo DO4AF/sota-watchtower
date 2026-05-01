@@ -1,98 +1,75 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, from, switchMap } from 'rxjs';
+import { fetchAuthSession } from 'aws-amplify/auth';
 import { environment } from '../../environments/environment';
-import { AuthService } from './auth.service';
 
 export interface SotaAlert {
   callsign: string;
   summit: string;
-  notified: boolean;
+  notified?: boolean;
   expiration?: number;
 }
 
 export interface SotaSpot {
   activatorCallsign: string;
   summitCode: string;
-  associationCode: string;
   frequency: string;
   mode: string;
   timeStamp: string;
-  summitName?: string;
 }
 
-export interface AppConfig {
-  telegramBotToken?: string;
-  telegramGroupId?: string;
-  telegramUserId?: string;
-  frequencyFilterPattern?: string;
-  sotaAssociations?: string;
-  activationZoneDistanceMeters?: string;
-  activationZoneAltitudeDeltaMeters?: string;
+export interface AprsPosition {
+  callsign: string;
+  latitude: string;
+  longitude: string;
+  altitude: string;
+  lastSeen: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
-  private authService = inject(AuthService);
+  private base = environment.apiBaseUrl;
 
   private authHeaders(): Observable<HttpHeaders> {
-    return from(this.authService.getIdToken()).pipe(
-      switchMap(token =>
-        from(
-          Promise.resolve(
-            new HttpHeaders({ Authorization: `Bearer ${token ?? ''}` }),
-          ),
-        ),
-      ),
+    return from(fetchAuthSession()).pipe(
+      switchMap(session => {
+        const token = session.tokens?.idToken?.toString() ?? '';
+        return [new HttpHeaders({ Authorization: token })];
+      })
     );
   }
 
   getSummits(): Observable<GeoJSON.FeatureCollection> {
-    return this.http.get<GeoJSON.FeatureCollection>(
-      `${environment.apiBaseUrl}/summits`,
-    );
+    return this.http.get<GeoJSON.FeatureCollection>(`${this.base}/summits`);
   }
 
   getAlerts(): Observable<SotaAlert[]> {
     return this.authHeaders().pipe(
-      switchMap(headers =>
-        this.http.get<SotaAlert[]>(`${environment.apiBaseUrl}/alerts`, {
-          headers,
-        }),
-      ),
+      switchMap(headers => this.http.get<SotaAlert[]>(`${this.base}/alerts`, { headers }))
     );
   }
 
   getSpots(): Observable<SotaSpot[]> {
     return this.authHeaders().pipe(
-      switchMap(headers =>
-        this.http.get<SotaSpot[]>(`${environment.apiBaseUrl}/spots`, {
-          headers,
-        }),
-      ),
+      switchMap(headers => this.http.get<SotaSpot[]>(`${this.base}/spots`, { headers }))
     );
   }
 
-  getConfig(): Observable<AppConfig> {
+  getAprsPositions(): Observable<AprsPosition[]> {
+    return this.http.get<AprsPosition[]>(`${this.base}/aprs-positions`);
+  }
+
+  getConfig(): Observable<Record<string, unknown>> {
     return this.authHeaders().pipe(
-      switchMap(headers =>
-        this.http.get<AppConfig>(`${environment.apiBaseUrl}/config`, {
-          headers,
-        }),
-      ),
+      switchMap(headers => this.http.get<Record<string, unknown>>(`${this.base}/config`, { headers }))
     );
   }
 
-  putConfig(config: AppConfig): Observable<{ message: string }> {
+  putConfig(config: Record<string, unknown>): Observable<unknown> {
     return this.authHeaders().pipe(
-      switchMap(headers =>
-        this.http.put<{ message: string }>(
-          `${environment.apiBaseUrl}/config`,
-          config,
-          { headers },
-        ),
-      ),
+      switchMap(headers => this.http.put(`${this.base}/config`, config, { headers }))
     );
   }
 }

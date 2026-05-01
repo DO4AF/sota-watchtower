@@ -1,20 +1,41 @@
-<p-toolbar styleClass="sota-toolbar">
+<p-toolbar class="sota-navbar">
   <ng-template #start>
-    <span class="sota-title">📡 SOTA Watchtower</span>
+    <a routerLink="/map" class="sota-brand">
+      <span class="sota-brand__icon">📡</span>
+      <span class="sota-brand__name">SOTA Watchtower</span>
+    </a>
+  </ng-template>
+
+  <ng-template #center>
     <nav class="sota-nav">
-      <a routerLink="/map" routerLinkActive="active">Map</a>
-      <a routerLink="/alerts" routerLinkActive="active">Alerts</a>
-      <a routerLink="/config" routerLinkActive="active">Config</a>
+      <a routerLink="/map" routerLinkActive="active">
+        <i class="pi pi-map"></i>
+        Map
+      </a>
+      <a routerLink="/alerts" routerLinkActive="active">
+        <i class="pi pi-bell"></i>
+        Alerts
+      </a>
+      <a routerLink="/config" routerLinkActive="active">
+        <i class="pi pi-cog"></i>
+        Config
+      </a>
     </nav>
   </ng-template>
+
   <ng-template #end>
-    <p-button
-      [icon]="themeService.isDark() ? 'pi pi-sun' : 'pi pi-moon'"
-      [rounded]="true"
-      [text]="true"
-      (onClick)="themeService.toggle()"
-      [title]="themeService.isDark() ? 'Switch to light mode' : 'Switch to dark mode'"
-    />
+    <div class="sota-toolbar-end">
+      <p-button
+        [icon]="themeService.isDark() ? 'pi pi-sun' : 'pi pi-moon'"
+        [rounded]="true"
+        [text]="true"
+        severity="secondary"
+        size="small"
+        (onClick)="themeService.toggle()"
+        [pTooltip]="themeService.isDark() ? 'Switch to light mode' : 'Switch to dark mode'"
+        tooltipPosition="bottom"
+      />
+    </div>
   </ng-template>
 </p-toolbar>
 

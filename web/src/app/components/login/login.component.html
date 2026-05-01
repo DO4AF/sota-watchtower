@@ -1,45 +1,59 @@
-<div class="login-wrapper">
-  <p-card header="SOTA Watchtower" styleClass="login-card">
-    <div class="login-subtitle">Sign in to continue</div>
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-card__header">
+      <div class="login-card__logo">📡</div>
+      <h1 class="login-card__title">SOTA Watchtower</h1>
+      <p class="login-card__subtitle">Sign in to your account</p>
+    </div>
 
-    @if (error) {
-      <p-message severity="error" [text]="error" styleClass="login-error" />
-    }
+    <form class="login-card__form" (ngSubmit)="login()" #loginForm="ngForm">
+      @if (error()) {
+        <p-message severity="error" [text]="error()!" styleClass="login-error" />
+      }
 
-    <form (ngSubmit)="login()" class="login-form">
-      <div class="field">
-        <label for="email">Email</label>
+      <div class="form-field">
+        <label for="email" class="form-label">Email address</label>
         <input
           id="email"
           type="email"
           pInputText
           [(ngModel)]="email"
           name="email"
-          autocomplete="username"
+          placeholder="you@example.com"
+          autocomplete="email"
           required
-          class="w-full"
+          class="form-input"
         />
       </div>
-      <div class="field">
-        <label for="password">Password</label>
+
+      <div class="form-field">
+        <label for="password" class="form-label">Password</label>
         <p-password
           inputId="password"
           [(ngModel)]="password"
           name="password"
           [feedback]="false"
           [toggleMask]="true"
+          placeholder="••••••••"
           autocomplete="current-password"
-          styleClass="w-full"
-          inputStyleClass="w-full"
+          styleClass="form-password"
+          required
         />
       </div>
+
       <p-button
         type="submit"
         label="Sign in"
         icon="pi pi-sign-in"
-        [loading]="loading"
-        styleClass="w-full"
+        [loading]="loading()"
+        [disabled]="!email || !password"
+        styleClass="login-btn"
+        [fluid]="true"
       />
     </form>
-  </p-card>
+
+    <div class="login-card__footer">
+      <span class="login-card__footer-text">Ham radio summit monitoring · APRS · SOTA</span>
+    </div>
+  </div>
 </div>

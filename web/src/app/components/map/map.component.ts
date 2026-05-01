@@ -4,17 +4,16 @@ import {
   OnDestroy,
   inject,
   signal,
-  computed,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LeafletModule } from '@bluehalo/ngx-leaflet';
 import { LeafletMarkerClusterModule } from '@bluehalo/ngx-leaflet-markercluster';
 import * as L from 'leaflet';
 import 'leaflet.markercluster';
-import { Subscription } from 'rxjs';
-import { CardModule } from 'primeng/card';
-import { ApiService, SotaAlert } from '../../services/api.service';
+import { interval, Subscription } from 'rxjs';
+import { ApiService, SotaAlert, AprsPosition } from '../../services/api.service';
 import { WebSocketService } from '../../services/websocket.service';
+import { ThemeService } from '../../services/theme.service';
 
 // Fix default Leaflet icon paths broken by webpack
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)['_getIconUrl'];
@@ -24,56 +23,70 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'assets/leaflet/marker-shadow.png',
 });
 
-const SUMMIT_ICON = L.divIcon({
-  className: '',
-  html: '<div class="summit-marker summit-marker--default">▲</div>',
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
-});
+function makeSummitIcon(cssClass: string, label: string, size: number): L.DivIcon {
+  return L.divIcon({
+    className: '',
+    html: `<div class="summit-marker ${cssClass}">${label}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
 
-const ALERT_ICON = L.divIcon({
-  className: '',
-  html: '<div class="summit-marker summit-marker--alert">▲</div>',
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-});
+const SUMMIT_ICON = makeSummitIcon('summit-marker--default', '▲', 22);
+const ALERT_ICON  = makeSummitIcon('summit-marker--alert',   '▲', 30);
+const NOTIFIED_ICON = makeSummitIcon('summit-marker--notified', '★', 34);
 
-const NOTIFIED_ICON = L.divIcon({
-  className: '',
-  html: '<div class="summit-marker summit-marker--notified">★</div>',
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-});
+function makeWalkerIcon(callsign: string): L.DivIcon {
+  return L.divIcon({
+    className: '',
+    html: `<div class="walker-marker"><span class="walker-icon">🚶</span><span class="walker-label">${callsign}</span></div>`,
+    iconSize: [80, 40],
+    iconAnchor: [40, 20],
+  });
+}
 
 @Component({
   selector: 'app-map',
   standalone: true,
-  imports: [CommonModule, LeafletModule, LeafletMarkerClusterModule, CardModule],
+  imports: [CommonModule, LeafletModule, LeafletMarkerClusterModule],
   templateUrl: './map.component.html',
   styleUrl: './map.component.scss',
 })
 export class MapComponent implements OnInit, OnDestroy {
   private apiService = inject(ApiService);
   private wsService = inject(WebSocketService);
+  private themeService = inject(ThemeService);
   private sub?: Subscription;
+  private aprsRefreshSub?: Subscription;
+
+  private lightTiles = L.tileLayer(
+    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>' }
+  );
+  private darkTiles = L.tileLayer(
+    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>' }
+  );
+
+  private leafletMap?: L.Map;
 
   mapOptions: L.MapOptions = {
-    layers: [
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 18,
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      }),
-    ],
+    layers: [this.darkTiles],
     zoom: 8,
     center: L.latLng(47.5, 11.5),
+    zoomControl: true,
   };
 
   clusterOptions: L.MarkerClusterGroupOptions = {
     maxClusterRadius: 40,
+    showCoverageOnHover: false,
   };
 
   private markersByCode = new Map<string, L.Marker>();
   private alertsByCode = new Map<string, SotaAlert>();
+  private walkerMarkers = new Map<string, L.Marker>();
+  walkerLayer = new L.LayerGroup();
+
   markers: L.Marker[] = [];
   loading = signal(true);
 
@@ -87,11 +100,33 @@ export class MapComponent implements OnInit, OnDestroy {
         this.updateMarkerIcon(alert.summit);
       }
     });
+    // Refresh APRS positions every 60 seconds
+    this.aprsRefreshSub = interval(60000).subscribe(() => this.loadAprsPositions());
   }
 
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
+    this.aprsRefreshSub?.unsubscribe();
     this.wsService.disconnect();
+  }
+
+  onMapReady(map: L.Map): void {
+    this.leafletMap = map;
+    this.walkerLayer.addTo(map);
+    // Apply correct tile layer based on current theme
+    this.applyTileLayer();
+  }
+
+  private applyTileLayer(): void {
+    if (!this.leafletMap) return;
+    const isDark = this.themeService.isDark();
+    this.lightTiles.remove();
+    this.darkTiles.remove();
+    if (isDark) {
+      this.darkTiles.addTo(this.leafletMap);
+    } else {
+      this.lightTiles.addTo(this.leafletMap);
+    }
   }
 
   private loadData(): void {
@@ -102,15 +137,24 @@ export class MapComponent implements OnInit, OnDestroy {
           const coords = (f.geometry as GeoJSON.Point).coordinates;
           const props = f.properties as Record<string, unknown>;
           const code = props['summitCode'] as string;
-          const popup = `<strong>${props['peakName']}</strong><br/>${code}<br/>${props['elevationM']} m — ${props['points']} pts`;
+          const popup = `
+            <div class="map-popup">
+              <div class="map-popup__title">${props['peakName']}</div>
+              <div class="map-popup__code">${code}</div>
+              <div class="map-popup__meta">
+                <span>⬆ ${props['elevationM']} m</span>
+                <span>★ ${props['points']} pts</span>
+              </div>
+            </div>`;
           const marker = L.marker([coords[1], coords[0]], { icon: SUMMIT_ICON })
-            .bindPopup(popup);
+            .bindPopup(popup, { className: 'sota-popup' });
           this.markersByCode.set(code, marker);
           newMarkers.push(marker);
         });
         this.markers = newMarkers;
         this.loading.set(false);
         this.loadAlerts();
+        this.loadAprsPositions();
       },
       error: () => this.loading.set(false),
     });
@@ -124,6 +168,54 @@ export class MapComponent implements OnInit, OnDestroy {
           this.updateMarkerIcon(a.summit);
         });
       },
+    });
+  }
+
+  private loadAprsPositions(): void {
+    this.apiService.getAprsPositions().subscribe({
+      next: positions => {
+        this.updateWalkerMarkers(positions);
+      },
+      error: () => { /* silently ignore */ },
+    });
+  }
+
+  private updateWalkerMarkers(positions: AprsPosition[]): void {
+    const seen = new Set<string>();
+    positions.forEach(pos => {
+      const lat = parseFloat(pos.latitude);
+      const lon = parseFloat(pos.longitude);
+      const alt = parseFloat(pos.altitude);
+      if (isNaN(lat) || isNaN(lon)) return;
+      seen.add(pos.callsign);
+
+      const popup = `
+        <div class="map-popup">
+          <div class="map-popup__title">🚶 ${pos.callsign}</div>
+          <div class="map-popup__meta">
+            <span>⬆ ${isNaN(alt) ? '?' : Math.round(alt)} m</span>
+            <span>🕐 ${pos.lastSeen ? new Date(pos.lastSeen + 'Z').toLocaleTimeString() : '?'}</span>
+          </div>
+        </div>`;
+
+      if (this.walkerMarkers.has(pos.callsign)) {
+        const m = this.walkerMarkers.get(pos.callsign)!;
+        m.setLatLng([lat, lon]);
+        m.setPopupContent(popup);
+      } else {
+        const m = L.marker([lat, lon], { icon: makeWalkerIcon(pos.callsign) })
+          .bindPopup(popup, { className: 'sota-popup' });
+        this.walkerMarkers.set(pos.callsign, m);
+        this.walkerLayer.addLayer(m);
+      }
+    });
+
+    // Remove stale walkers
+    this.walkerMarkers.forEach((marker, callsign) => {
+      if (!seen.has(callsign)) {
+        this.walkerLayer.removeLayer(marker);
+        this.walkerMarkers.delete(callsign);
+      }
     });
   }
 

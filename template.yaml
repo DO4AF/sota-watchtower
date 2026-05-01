@@ -202,6 +202,7 @@ Resources:
           TELEGRAMNOTIFYFUNCTION_FUNCTION_NAME: !Ref TelegramNotifyFunction
           TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN: !GetAtt TelegramNotifyFunction.Arn
           WEBSOCKETBROADCASTFUNCTION_FUNCTION_ARN: !GetAtt WebSocketBroadcastFunction.Arn
+          APRSPOSITIONSTABLE_TABLE_NAME: !Ref AprsPositionsTable
       Layers:
         - !Ref RequestsLayer
         - !Ref GeopyLayer
@@ -212,6 +213,8 @@ Resources:
             FunctionName: !Ref GetSotaSpotsFunction
         - DynamoDBCrudPolicy:
             TableName: !Ref SotaAlertsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AprsPositionsTable
         - LambdaInvokePolicy:
             FunctionName: !Ref TelegramNotifyFunction
         - LambdaInvokePolicy:
@@ -499,6 +502,21 @@ Resources:
       TreatMissingData: breaching
 
 
+  # ─── APRS Positions Table ────────────────────────────────────────────────────
+  AprsPositionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: callsign
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: callsign
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
   # ─── Web UI: DynamoDB Tables ────────────────────────────────────────────────
   ConfigTable:
     Type: AWS::DynamoDB::Table
@@ -577,6 +595,38 @@ Resources:
         Authorizers:
           CognitoAuthorizer:
             UserPoolArn: !GetAtt WatchtowerUserPool.Arn
+
+  GetAprsPositionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetAprsPositionsFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: GetAprsPositionsFunction
+      CodeUri: src/GetAprsPositionsFunction
+      Handler: handler.handler
+      Runtime: python3.13
+      MemorySize: 512
+      Timeout: 30
+      Tracing: Active
+      Events:
+        GetAprsPositions:
+          Type: Api
+          Properties:
+            Path: /aprs-positions
+            Method: GET
+            RestApiId: !Ref WatchtowerWebApi
+            Auth:
+              Authorizer: NONE
+      Environment:
+        Variables:
+          APRSPOSITIONSTABLE_TABLE_NAME: !Ref AprsPositionsTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AprsPositionsTable
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
 
   GetSummitsFunction:
     Type: AWS::Serverless::Function
@@ -1002,5 +1052,8 @@ Outputs:
     Value: !GetAtt AmplifyApp.AppId
     Export:
       Name: !Sub ${AWS::StackName}-AmplifyAppId
+  DashboardUrlExport:
+    Description: URL to the CloudWatch Dashboard (export)
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards/dashboard/${SotaWatchtowerDashboard}
     Export:
       Name: !Sub ${AWS::StackName}-DashboardUrl
