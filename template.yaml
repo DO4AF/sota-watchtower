@@ -543,6 +543,29 @@ Resources:
         AttributeName: ttl
         Enabled: true
 
+  # ─── Summits Table (populated daily by RefreshSummitsFunction) ──────────────
+  SummitsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: summitCode
+          AttributeType: S
+        - AttributeName: association
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: summitCode
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: AssociationIndex
+          KeySchema:
+            - AttributeName: association
+              KeyType: HASH
+            - AttributeName: summitCode
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
   # ─── Web UI: Cognito ─────────────────────────────────────────────────────────
   WatchtowerUserPool:
     Type: AWS::Cognito::UserPool
@@ -650,6 +673,44 @@ Resources:
             RestApiId: !Ref WatchtowerWebApi
             Auth:
               Authorizer: NONE
+      Environment:
+        Variables:
+          SUMMITS_TABLE_NAME: !Ref SummitsTable
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref SummitsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigTable
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+
+  RefreshSummitsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RefreshSummitsFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: RefreshSummitsFunction
+      CodeUri: src/RefreshSummitsFunction
+      Handler: handler.handler
+      Runtime: python3.13
+      MemorySize: 512
+      Timeout: 300
+      Tracing: Active
+      Events:
+        DailyRefresh:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 2 * * ? *)
+            Description: Refresh SOTA summits database daily at 02:00 UTC
+      Environment:
+        Variables:
+          SUMMITS_TABLE_NAME: !Ref SummitsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SummitsTable
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup

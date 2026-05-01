@@ -1,0 +1,1 @@
+# No third-party dependencies — uses stdlib (csv, urllib) + boto3 (included in Lambda runtime)

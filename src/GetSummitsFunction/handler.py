@@ -1,110 +1,119 @@
-import csv
-import io
+"""
+GetSummitsFunction — returns SOTA summits as GeoJSON FeatureCollection.
+
+Data is read from SummitsTable (DynamoDB), which is populated daily by
+RefreshSummitsFunction.  Returns only summits for the associations
+configured in ConfigTable (key "config", field "sotaAssociations").
+
+GET /summits
+  ?associations=DL,OE,HB   (optional override; comma-separated)
+"""
+
 import json
 import os
-import time
-from datetime import datetime, timezone
-from urllib.request import urlopen
-from urllib.error import URLError
+
+import boto3
+from boto3.dynamodb.conditions import Key
+
+dynamodb = boto3.resource('dynamodb')
 
 CORS_HEADERS = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin':  '*',
     'Access-Control-Allow-Headers': 'Authorization,Content-Type',
-    'Content-Type': 'application/json',
+    'Access-Control-Allow-Methods': 'GET,OPTIONS',
+    'Content-Type':                 'application/json',
 }
 
-SUMMITS_URL = 'https://storage.sota.org.uk/summitslist.csv'
-CACHE_PATH  = '/tmp/summitslist.csv'
-CACHE_TTL   = 86400  # 24 hours
+# European associations served by default when config is unavailable
+DEFAULT_ASSOCIATIONS = [
+    'DL', 'OE', 'HB', 'HB0', 'F', 'I',
+    'PA', 'ON', 'LX', '9A', 'OK', 'SP',
+    'OM', 'HA', 'S5', 'YU', 'YO', 'LZ',
+]
 
 
-def _fetch_csv_text() -> str:
-    """Return CSV text, preferring a fresh /tmp cache over the bundled file."""
-    # Use cached version if it exists and is younger than 24 h
-    if os.path.exists(CACHE_PATH):
-        age = time.time() - os.path.getmtime(CACHE_PATH)
-        if age < CACHE_TTL:
-            with open(CACHE_PATH, encoding='utf-8') as f:
-                return f.read()
-
-    # Try downloading fresh copy
+def get_associations_from_config() -> list[str]:
+    """Read sotaAssociations from ConfigTable; fall back to DEFAULT_ASSOCIATIONS."""
+    table_name = os.environ.get('CONFIGTABLE_TABLE_NAME')
+    if not table_name:
+        return DEFAULT_ASSOCIATIONS
     try:
-        with urlopen(SUMMITS_URL, timeout=10) as resp:
-            text = resp.read().decode('utf-8')
-        with open(CACHE_PATH, 'w', encoding='utf-8') as f:
-            f.write(text)
-        return text
-    except (URLError, OSError) as exc:
-        print(f'[GetSummitsFunction] Download failed ({exc}); falling back to bundled CSV.')
-
-    # Fall back to bundled CSV shipped with the Lambda package
-    bundled = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'summitslist.csv')
-    with open(bundled, encoding='utf-8') as f:
-        return f.read()
-
-
-def _parse_date(s: str) -> datetime:
-    """Parse DD/MM/YYYY date string into an aware UTC datetime (midnight)."""
-    return datetime.strptime(s.strip(), '%d/%m/%Y').replace(tzinfo=timezone.utc)
+        table = dynamodb.Table(table_name)
+        resp  = table.get_item(Key={'configKey': 'config'})
+        item  = resp.get('Item', {})
+        raw   = item.get('sotaAssociations', '').strip()
+        if raw:
+            return [a.strip() for a in raw.split(',') if a.strip()]
+    except Exception as e:
+        print(f"ConfigTable read error: {e}")
+    return DEFAULT_ASSOCIATIONS
 
 
 def handler(event, context):
-    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    if event.get('httpMethod') == 'OPTIONS':
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
-    csv_text = _fetch_csv_text()
-    reader = csv.reader(io.StringIO(csv_text))
+    # Association list: explicit param > config > hardcoded defaults
+    params      = event.get('queryStringParameters') or {}
+    assoc_param = params.get('associations')
+    if assoc_param:
+        associations = [a.strip() for a in assoc_param.split(',') if a.strip()]
+    else:
+        associations = get_associations_from_config()
 
-    features = []
-    for row in reader:
-        # Skip header rows / comment rows / short rows
-        if len(row) < 14:
-            continue
-        if row[0].startswith('SOTA') or row[0].strip() == 'SummitCode':
-            continue
+    print(f"Querying associations: {associations}")
 
+    summits_table = dynamodb.Table(os.environ['SUMMITS_TABLE_NAME'])
+    features: list[dict] = []
+
+    for assoc in associations:
         try:
-            summit_code    = row[0].strip()
-            association    = row[1].strip()
-            region         = row[2].strip()
-            peak_name      = row[3].strip()
-            elevation_m    = int(float(row[4].strip()))
-            lon            = float(row[8].strip())   # Longitude column
-            lat            = float(row[9].strip())   # Latitude column
-            points         = int(float(row[10].strip()))
-            valid_from_str = row[12].strip()
-            valid_to_str   = row[13].strip()
-        except (ValueError, IndexError):
-            continue
+            resp  = summits_table.query(
+                IndexName='AssociationIndex',
+                KeyConditionExpression=Key('association').eq(assoc),
+            )
+            items = resp.get('Items', [])
 
-        # Validity filter
-        try:
-            valid_from = _parse_date(valid_from_str)
-            valid_to   = _parse_date(valid_to_str)
-        except ValueError:
-            continue
+            # Paginate if needed (unlikely for a single association, but safe)
+            while 'LastEvaluatedKey' in resp:
+                resp  = summits_table.query(
+                    IndexName='AssociationIndex',
+                    KeyConditionExpression=Key('association').eq(assoc),
+                    ExclusiveStartKey=resp['LastEvaluatedKey'],
+                )
+                items.extend(resp.get('Items', []))
 
-        if today < valid_from or today > valid_to:
-            continue
+            for item in items:
+                try:
+                    lat = float(item['latitude'])
+                    lon = float(item['longitude'])
+                except (KeyError, ValueError, TypeError):
+                    continue
 
-        features.append({
-            'type': 'Feature',
-            'geometry': {
-                'type': 'Point',
-                'coordinates': [lon, lat],
-            },
-            'properties': {
-                'summitCode':      summit_code,
-                'associationName': association,
-                'region':          region,
-                'peakName':        peak_name,
-                'elevationM':      elevation_m,
-                'points':          points,
-            },
-        })
+                features.append({
+                    'type': 'Feature',
+                    'geometry': {
+                        'type':        'Point',
+                        'coordinates': [lon, lat],
+                    },
+                    'properties': {
+                        'summitCode':      item.get('summitCode', ''),
+                        'peakName':        item.get('peakName', ''),
+                        'elevationM':      int(item.get('elevationM', 0)),
+                        'points':          int(item.get('points', 1)),
+                        'associationName': item.get('associationName', ''),
+                        'region':          item.get('region', ''),
+                        'association':     item.get('association', ''),
+                    },
+                })
 
-    body = json.dumps({'type': 'FeatureCollection', 'features': features})
+        except Exception as e:
+            print(f"Error querying association {assoc}: {e}")
+
+    print(f"Returning {len(features)} summits from {len(associations)} associations")
+
     return {
         'statusCode': 200,
-        'headers': CORS_HEADERS,
-        'body': body,
+        'headers':    CORS_HEADERS,
+        'body':       json.dumps({'type': 'FeatureCollection', 'features': features}),
     }
