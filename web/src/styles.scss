@@ -1,0 +1,38 @@
+@import 'primeicons/primeicons.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--p-font-family);
+}
+
+// ─── Summit map marker styles ─────────────────────────────────────────────────
+// Injected as Leaflet divIcon HTML — component style encapsulation doesn't apply
+.summit-marker {
+  font-size: 14px;
+  line-height: 1;
+  text-shadow: 0 0 3px #fff;
+  display: inline-block;
+
+  &--default {
+    color: #555;
+  }
+
+  &--alert {
+    color: #e67e22;
+    font-size: 18px;
+    text-shadow: 0 0 4px rgba(230, 126, 34, 0.5);
+  }
+
+  &--notified {
+    color: #27ae60;
+    font-size: 22px;
+    text-shadow: 0 0 4px rgba(39, 174, 96, 0.5);
+  }
+}

@@ -1,0 +1,16 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd web && npm ci
+    build:
+      commands:
+        - cd web && npx ng build --configuration production
+  artifacts:
+    baseDirectory: web/dist/sota-watchtower-web/browser
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - 'web/node_modules/**/*'

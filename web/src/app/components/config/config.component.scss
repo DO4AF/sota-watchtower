@@ -1,0 +1,51 @@
+.config-page {
+  padding: 1.5rem;
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.config-loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--p-text-muted-color);
+}
+
+.propagation-warning {
+  width: 100%;
+}
+
+.config-card {
+  width: 100%;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+
+  label {
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  .hint {
+    color: var(--p-text-muted-color);
+    font-size: 0.75rem;
+  }
+}
+
+.config-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: 2rem;
+}
+
+.unsaved-hint {
+  color: var(--p-yellow-500);
+  font-size: 0.875rem;
+}

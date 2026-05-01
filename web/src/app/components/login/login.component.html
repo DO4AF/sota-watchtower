@@ -1,0 +1,45 @@
+<div class="login-wrapper">
+  <p-card header="SOTA Watchtower" styleClass="login-card">
+    <div class="login-subtitle">Sign in to continue</div>
+
+    @if (error) {
+      <p-message severity="error" [text]="error" styleClass="login-error" />
+    }
+
+    <form (ngSubmit)="login()" class="login-form">
+      <div class="field">
+        <label for="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          pInputText
+          [(ngModel)]="email"
+          name="email"
+          autocomplete="username"
+          required
+          class="w-full"
+        />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <p-password
+          inputId="password"
+          [(ngModel)]="password"
+          name="password"
+          [feedback]="false"
+          [toggleMask]="true"
+          autocomplete="current-password"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        />
+      </div>
+      <p-button
+        type="submit"
+        label="Sign in"
+        icon="pi pi-sign-in"
+        [loading]="loading"
+        styleClass="w-full"
+      />
+    </form>
+  </p-card>
+</div>

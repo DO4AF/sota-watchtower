@@ -1,0 +1,21 @@
+<div class="map-container">
+  @if (loading()) {
+    <div class="map-loading">Loading summits…</div>
+  }
+
+  <div
+    leaflet
+    [leafletOptions]="mapOptions"
+    [leafletMarkerCluster]="markers"
+    [leafletMarkerClusterOptions]="clusterOptions"
+    class="sota-map"
+  ></div>
+
+  <div class="map-legend">
+    <p-card>
+      <div class="legend-row"><span class="summit-marker summit-marker--default">▲</span> Summit</div>
+      <div class="legend-row"><span class="summit-marker summit-marker--alert">▲</span> Active alert</div>
+      <div class="legend-row"><span class="summit-marker summit-marker--notified">★</span> Confirmed on summit</div>
+    </p-card>
+  </div>
+</div>

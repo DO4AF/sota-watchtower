@@ -1,0 +1,41 @@
+.map-container {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.sota-map {
+  height: 100%;
+  width: 100%;
+}
+
+.map-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 500;
+  background: var(--p-surface-card);
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  box-shadow: var(--p-overlay-modal-shadow);
+}
+
+.map-legend {
+  position: absolute;
+  bottom: 2rem;
+  right: 1rem;
+  z-index: 500;
+  min-width: 180px;
+
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.2rem 0;
+    font-size: 0.875rem;
+  }
+}
+
+// Summit marker styles are defined globally in styles.scss
+// (Angular component encapsulation doesn't apply to dynamically injected divIcon HTML)

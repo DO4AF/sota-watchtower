@@ -1,0 +1,126 @@
+<p-toast />
+
+<div class="config-page" (change)="onFormChange()">
+  @if (loading()) {
+    <div class="config-loading">Loading configuration…</div>
+  } @else {
+    <p-message
+      severity="warn"
+      styleClass="propagation-warning"
+      text="⚠ Changes to Telegram credentials are stored in DynamoDB but do NOT automatically update running Lambda environment variables. A redeployment is required for those changes to take effect."
+    />
+
+    <form (ngSubmit)="save()" (keyup)="onFormChange()" (change)="onFormChange()">
+      <!-- Telegram -->
+      <p-card header="Telegram" styleClass="config-card">
+        <div class="field">
+          <label for="botToken">Bot Token</label>
+          <p-password
+            inputId="botToken"
+            [(ngModel)]="telegramBotToken"
+            name="botToken"
+            [feedback]="false"
+            [toggleMask]="true"
+            styleClass="w-full"
+            inputStyleClass="w-full"
+            (ngModelChange)="onFormChange()"
+          />
+        </div>
+        <div class="field">
+          <label for="groupId">Group Chat ID</label>
+          <input
+            id="groupId"
+            pInputText
+            [(ngModel)]="telegramGroupId"
+            name="groupId"
+            class="w-full"
+          />
+        </div>
+        <div class="field">
+          <label for="userId">User Chat ID</label>
+          <input
+            id="userId"
+            pInputText
+            [(ngModel)]="telegramUserId"
+            name="userId"
+            class="w-full"
+          />
+        </div>
+      </p-card>
+
+      <!-- Filters -->
+      <p-card header="Filters" styleClass="config-card">
+        <div class="field">
+          <label for="freqPattern">Frequency filter pattern (regex)</label>
+          <input
+            id="freqPattern"
+            pInputText
+            [(ngModel)]="frequencyFilterPattern"
+            name="freqPattern"
+            class="w-full"
+            placeholder="\b(145|433|2|70).*-.*\b"
+          />
+        </div>
+        <div class="field">
+          <label for="associations">Monitored SOTA Associations</label>
+          <p-multiselect
+            inputId="associations"
+            [options]="associationOptions"
+            [(ngModel)]="selectedAssociations"
+            name="associations"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Select associations"
+            styleClass="w-full"
+            (ngModelChange)="onFormChange()"
+          />
+          <small class="hint">
+            Summits dataset currently covers DL, OE, DM only.
+            Selecting other associations will filter spots but not add map markers.
+          </small>
+        </div>
+      </p-card>
+
+      <!-- Activation Zone -->
+      <p-card header="Activation Zone Thresholds" styleClass="config-card">
+        <div class="field">
+          <label>Max distance from summit: <strong>{{ activationZoneDistance }} m</strong></label>
+          <p-slider
+            [(ngModel)]="activationZoneDistance"
+            name="distance"
+            [min]="100"
+            [max]="500"
+            [step]="50"
+            styleClass="w-full"
+            (ngModelChange)="onFormChange()"
+          />
+        </div>
+        <div class="field">
+          <label>Max altitude below summit: <strong>{{ activationZoneAltitude }} m</strong></label>
+          <p-slider
+            [(ngModel)]="activationZoneAltitude"
+            name="altitude"
+            [min]="0"
+            [max]="50"
+            [step]="5"
+            styleClass="w-full"
+            (ngModelChange)="onFormChange()"
+          />
+        </div>
+      </p-card>
+
+      <div class="config-actions">
+        <p-button
+          type="submit"
+          label="Save configuration"
+          icon="pi pi-save"
+          [loading]="saving()"
+          [disabled]="!hasChanges()"
+        />
+        @if (hasChanges()) {
+          <span class="unsaved-hint">You have unsaved changes</span>
+        }
+      </div>
+    </form>
+  }
+</div>

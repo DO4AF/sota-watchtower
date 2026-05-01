@@ -12,6 +12,13 @@ Parameters:
   FrequencyFilterPattern:
     Description: Frequency pattern to filter Alerts
     Type: String
+  AdminEmail:
+    Description: E-mail address for the initial web-UI admin user (Cognito)
+    Type: String
+  AdminPassword:
+    Description: Initial password for the web-UI admin user (min 8 chars, upper+lower+number+symbol)
+    Type: String
+    NoEcho: true
 Resources:
   HamAlertApi:
     Type: AWS::Serverless::Api
@@ -44,7 +51,7 @@ Resources:
         - ResourceName: HamAlertProcessFunction
       CodeUri: src/HamAlertProcessFunction
       Handler: handler.handler
-      Runtime: python3.12
+      Runtime: python3.13
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
@@ -76,7 +83,7 @@ Resources:
       ContentUri: src/RequestsLayer
       RetentionPolicy: Delete
     Metadata:
-      BuildMethod: python3.12
+      BuildMethod: python3.13
   GetSotaAlertsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -86,7 +93,7 @@ Resources:
         - ResourceName: GetSotaAlertsFunction
       CodeUri: src/GetSotaAlertsFunction
       Handler: handler.handler
-      Runtime: python3.12
+      Runtime: python3.13
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
@@ -112,7 +119,7 @@ Resources:
         - ResourceName: DailyBriefingFunction
       CodeUri: src/DailyBriefingFunction
       Handler: handler.handler
-      Runtime: python3.12
+      Runtime: python3.13
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
@@ -140,7 +147,7 @@ Resources:
         - ResourceName: TelegramNotifyFunction
       CodeUri: src/TelegramNotifyFunction
       Handler: handler.handler
-      Runtime: python3.12
+      Runtime: python3.13
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
@@ -161,7 +168,7 @@ Resources:
         - ResourceName: GetSotaSpotsFunction
       CodeUri: src/GetSotaSpotsFunction
       Handler: handler.handler
-      Runtime: python3.12
+      Runtime: python3.13
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
@@ -179,7 +186,7 @@ Resources:
         - ResourceName: ActivationZoneMonitorFunction
       CodeUri: src/ActivationZoneMonitorFunction
       Handler: handler.handler
-      Runtime: python3.12
+      Runtime: python3.13
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
@@ -194,6 +201,7 @@ Resources:
           SOTAALERTSTABLE_TABLE_ARN: !GetAtt SotaAlertsTable.Arn
           TELEGRAMNOTIFYFUNCTION_FUNCTION_NAME: !Ref TelegramNotifyFunction
           TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN: !GetAtt TelegramNotifyFunction.Arn
+          WEBSOCKETBROADCASTFUNCTION_FUNCTION_ARN: !GetAtt WebSocketBroadcastFunction.Arn
       Layers:
         - !Ref RequestsLayer
         - !Ref GeopyLayer
@@ -206,6 +214,8 @@ Resources:
             TableName: !Ref SotaAlertsTable
         - LambdaInvokePolicy:
             FunctionName: !Ref TelegramNotifyFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref WebSocketBroadcastFunction
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup
@@ -218,7 +228,7 @@ Resources:
       ContentUri: src/GeopyLayer
       RetentionPolicy: Delete
     Metadata:
-      BuildMethod: python3.12
+      BuildMethod: python3.13
   SotaAlertsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -489,6 +499,474 @@ Resources:
       TreatMissingData: breaching
 
 
+  # ─── Web UI: DynamoDB Tables ────────────────────────────────────────────────
+  ConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: configKey
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: configKey
+          KeyType: HASH
+
+  WebSocketConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: connectionId
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: connectionId
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ─── Web UI: Cognito ─────────────────────────────────────────────────────────
+  WatchtowerUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub ${AWS::StackName}-WatchtowerUserPool
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+
+  WatchtowerUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: WatchtowerWebClient
+      UserPoolId: !Ref WatchtowerUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+
+  # ─── Web UI: REST API ────────────────────────────────────────────────────────
+  WatchtowerWebApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${AWS::StackName}
+        - ResourceName: WatchtowerWebApi
+      StageName: Prod
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+      Cors:
+        AllowOrigin: "'*'"
+        AllowHeaders: "'Authorization,Content-Type'"
+        AllowMethods: "'GET,PUT,OPTIONS'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt WatchtowerUserPool.Arn
+
+  GetSummitsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetSummitsFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: GetSummitsFunction
+      CodeUri: src/GetSummitsFunction
+      Handler: handler.handler
+      Runtime: python3.13
+      MemorySize: 512
+      Timeout: 30
+      Tracing: Active
+      Events:
+        GetSummits:
+          Type: Api
+          Properties:
+            Path: /summits
+            Method: GET
+            RestApiId: !Ref WatchtowerWebApi
+            Auth:
+              Authorizer: NONE
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+
+  GetAlertsWebFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetAlertsWebFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: GetAlertsWebFunction
+      CodeUri: src/GetAlertsWebFunction
+      Handler: handler.handler
+      Runtime: python3.13
+      MemorySize: 512
+      Timeout: 30
+      Tracing: Active
+      Events:
+        GetAlerts:
+          Type: Api
+          Properties:
+            Path: /alerts
+            Method: GET
+            RestApiId: !Ref WatchtowerWebApi
+      Environment:
+        Variables:
+          SOTAALERTSTABLE_TABLE_NAME: !Ref SotaAlertsTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref SotaAlertsTable
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+
+  GetSpotsWebFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetSpotsWebFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: GetSpotsWebFunction
+      CodeUri: src/GetSpotsWebFunction
+      Handler: handler.handler
+      Runtime: python3.13
+      MemorySize: 512
+      Timeout: 30
+      Tracing: Active
+      Layers:
+        - !Ref RequestsLayer
+      Events:
+        GetSpots:
+          Type: Api
+          Properties:
+            Path: /spots
+            Method: GET
+            RestApiId: !Ref WatchtowerWebApi
+      Environment:
+        Variables:
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigTable
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+
+  GetConfigFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetConfigFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: GetConfigFunction
+      CodeUri: src/GetConfigFunction
+      Handler: handler.handler
+      Runtime: python3.13
+      MemorySize: 512
+      Timeout: 30
+      Tracing: Active
+      Events:
+        GetConfig:
+          Type: Api
+          Properties:
+            Path: /config
+            Method: GET
+            RestApiId: !Ref WatchtowerWebApi
+      Environment:
+        Variables:
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigTable
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+
+  PutConfigFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PutConfigFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: PutConfigFunction
+      CodeUri: src/PutConfigFunction
+      Handler: handler.handler
+      Runtime: python3.13
+      MemorySize: 512
+      Timeout: 30
+      Tracing: Active
+      Events:
+        PutConfig:
+          Type: Api
+          Properties:
+            Path: /config
+            Method: PUT
+            RestApiId: !Ref WatchtowerWebApi
+      Environment:
+        Variables:
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConfigTable
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+
+  # ─── Web UI: WebSocket API ───────────────────────────────────────────────────
+  WatchtowerWsApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub ${AWS::StackName}-WatchtowerWsApi
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+
+  WatchtowerWsConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WatchtowerWsApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketConnectFunction.Arn}/invocations
+
+  WatchtowerWsDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WatchtowerWsApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketDisconnectFunction.Arn}/invocations
+
+  WatchtowerWsConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WatchtowerWsApi
+      RouteKey: $connect
+      AuthorizationType: NONE
+      Target: !Sub integrations/${WatchtowerWsConnectIntegration}
+
+  WatchtowerWsDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WatchtowerWsApi
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      Target: !Sub integrations/${WatchtowerWsDisconnectIntegration}
+
+  WatchtowerWsDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - WatchtowerWsConnectRoute
+      - WatchtowerWsDisconnectRoute
+    Properties:
+      ApiId: !Ref WatchtowerWsApi
+
+  WatchtowerWsStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref WatchtowerWsApi
+      DeploymentId: !Ref WatchtowerWsDeployment
+      StageName: Prod
+
+  WebSocketConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WebSocketConnectFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: WebSocketConnectFunction
+      CodeUri: src/WebSocketConnectFunction
+      Handler: handler.handler
+      Runtime: python3.13
+      MemorySize: 256
+      Timeout: 10
+      Tracing: Active
+      Environment:
+        Variables:
+          WEBSOCKETCONNECTIONSTABLE_TABLE_NAME: !Ref WebSocketConnectionsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketConnectionsTable
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+
+  WebSocketConnectFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WebSocketConnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${WatchtowerWsApi}/*/$connect
+
+  WebSocketDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WebSocketDisconnectFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: WebSocketDisconnectFunction
+      CodeUri: src/WebSocketDisconnectFunction
+      Handler: handler.handler
+      Runtime: python3.13
+      MemorySize: 256
+      Timeout: 10
+      Tracing: Active
+      Environment:
+        Variables:
+          WEBSOCKETCONNECTIONSTABLE_TABLE_NAME: !Ref WebSocketConnectionsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketConnectionsTable
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+
+  WebSocketDisconnectFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WebSocketDisconnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${WatchtowerWsApi}/*/$disconnect
+
+  WebSocketBroadcastFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WebSocketBroadcastFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: WebSocketBroadcastFunction
+      CodeUri: src/WebSocketBroadcastFunction
+      Handler: handler.handler
+      Runtime: python3.13
+      MemorySize: 512
+      Timeout: 30
+      Tracing: Active
+      Events:
+        SotaAlertsStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt SotaAlertsTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+            FilterCriteria:
+              Filters:
+                - Pattern: '{"eventName": ["INSERT", "MODIFY"]}'
+      Environment:
+        Variables:
+          WEBSOCKETCONNECTIONSTABLE_TABLE_NAME: !Ref WebSocketConnectionsTable
+          WS_API_ENDPOINT: !Sub https://${WatchtowerWsApi}.execute-api.${AWS::Region}.amazonaws.com/Prod
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketConnectionsTable
+        - Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${WatchtowerWsApi}/*
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+
+  # ─── Web UI: Config Seeding (Custom Resource) ────────────────────────────────
+  SeedConfigFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SeedConfigFunction
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: SeedConfigFunction
+      CodeUri: src/SeedConfigFunction
+      Handler: handler.handler
+      Runtime: python3.13
+      MemorySize: 256
+      Timeout: 60
+      Tracing: Active
+      Environment:
+        Variables:
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConfigTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminSetUserPassword
+              Resource: !GetAtt WatchtowerUserPool.Arn
+      LoggingConfig:
+        LogFormat: Text
+        LogGroup: !Ref SotaWatchtowerMasterLogGroup
+
+  SeedConfigCustomResource:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt SeedConfigFunction.Arn
+      ConfigTableName: !Ref ConfigTable
+      TelegramBotToken: !Ref TelegramBotToken
+      TelegramGroupId: !Ref TelegramGroupChatId
+      TelegramUserId: !Ref TelegramUserChatId
+      FrequencyFilterPattern: !Ref FrequencyFilterPattern
+      UserPoolId: !Ref WatchtowerUserPool
+      AdminEmail: !Ref AdminEmail
+      AdminPassword: !Ref AdminPassword
+
+  # ─── Web UI: Amplify Hosting ─────────────────────────────────────────────────
+  AmplifyApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: sota-watchtower-web
+      Description: SOTA Watchtower Web Interface
+      BuildSpec: |
+        version: 1
+        frontend:
+          phases:
+            preBuild:
+              commands:
+                - cd web && npm ci
+            build:
+              commands:
+                - npx ng build --configuration production
+          artifacts:
+            baseDirectory: web/dist/sota-watchtower-web/browser
+            files:
+              - '**/*'
+          cache:
+            paths:
+              - 'web/node_modules/**/*'
+      CustomRules:
+        - Source: '</^((?!\.(css|gif|ico|jpg|js|png|txt|svg|woff|ttf|map|json)$).)*$/'
+          Target: /index.html
+          Status: '200'
+      EnvironmentVariables:
+        - Name: ANGULAR_API_BASE_URL
+          Value: !Sub https://${WatchtowerWebApi}.execute-api.${AWS::Region}.amazonaws.com/Prod
+        - Name: ANGULAR_WS_URL
+          Value: !Sub wss://${WatchtowerWsApi}.execute-api.${AWS::Region}.amazonaws.com/Prod
+        - Name: ANGULAR_COGNITO_USER_POOL_ID
+          Value: !Ref WatchtowerUserPool
+        - Name: ANGULAR_COGNITO_CLIENT_ID
+          Value: !Ref WatchtowerUserPoolClient
+        - Name: ANGULAR_REGION
+          Value: !Ref AWS::Region
+
+  AmplifyMainBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt AmplifyApp.AppId
+      BranchName: main
+      EnableAutoBuild: false
+
 Outputs:
   ApiGatewayInvokeUrl:
     Description: URL to enter into HamAlert Destination
@@ -498,5 +976,30 @@ Outputs:
   DashboardUrl:
     Description: URL to the CloudWatch Dashboard
     Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards/dashboard/${SotaWatchtowerDashboard}
+  WatchtowerWebApiUrl:
+    Description: Base URL for the Watchtower REST API
+    Value: !Sub https://${WatchtowerWebApi}.execute-api.${AWS::Region}.amazonaws.com/Prod
+    Export:
+      Name: !Sub ${AWS::StackName}-WatchtowerWebApiUrl
+  WatchtowerWsApiUrl:
+    Description: WebSocket URL for real-time updates
+    Value: !Sub wss://${WatchtowerWsApi}.execute-api.${AWS::Region}.amazonaws.com/Prod
+    Export:
+      Name: !Sub ${AWS::StackName}-WatchtowerWsApiUrl
+  CognitoUserPoolId:
+    Description: Cognito User Pool ID for the web UI
+    Value: !Ref WatchtowerUserPool
+    Export:
+      Name: !Sub ${AWS::StackName}-CognitoUserPoolId
+  CognitoClientId:
+    Description: Cognito App Client ID for the web UI
+    Value: !Ref WatchtowerUserPoolClient
+    Export:
+      Name: !Sub ${AWS::StackName}-CognitoClientId
+  AmplifyAppId:
+    Description: Amplify App ID (connect your GitHub repo here)
+    Value: !GetAtt AmplifyApp.AppId
+    Export:
+      Name: !Sub ${AWS::StackName}-AmplifyAppId
     Export:
       Name: !Sub ${AWS::StackName}-DashboardUrl

@@ -1,0 +1,78 @@
+<div class="alerts-page">
+  <p-tabs value="alerts">
+    <p-tablist>
+      <p-tab value="alerts">Alerts</p-tab>
+      <p-tab value="spots">Live Spots (auto-refresh 30s)</p-tab>
+    </p-tablist>
+
+    <p-tabpanels>
+      <p-tabpanel value="alerts">
+        <p-table
+          [value]="alerts()"
+          [loading]="alertsLoading()"
+          [tableStyle]="{ 'min-width': '40rem' }"
+          stripedRows
+          [paginator]="true"
+          [rows]="25"
+        >
+          <ng-template #header>
+            <tr>
+              <th>Callsign</th>
+              <th>Summit</th>
+              <th>Status</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-alert>
+            <tr>
+              <td><strong>{{ alert.callsign }}</strong></td>
+              <td>{{ alert.summit }}</td>
+              <td>
+                @if (alert.notified) {
+                  <p-tag severity="success" value="On summit" icon="pi pi-star" />
+                } @else {
+                  <p-tag severity="warn" value="Planned" icon="pi pi-clock" />
+                }
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template #emptymessage>
+            <tr><td colspan="3">No alerts today.</td></tr>
+          </ng-template>
+        </p-table>
+      </p-tabpanel>
+
+      <p-tabpanel value="spots">
+        <p-table
+          [value]="spots()"
+          [loading]="spotsLoading()"
+          [tableStyle]="{ 'min-width': '40rem' }"
+          stripedRows
+          [paginator]="true"
+          [rows]="25"
+        >
+          <ng-template #header>
+            <tr>
+              <th>Activator</th>
+              <th>Summit</th>
+              <th>Frequency</th>
+              <th>Mode</th>
+              <th>Time (UTC)</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-spot>
+            <tr>
+              <td><strong>{{ spot.activatorCallsign }}</strong></td>
+              <td>{{ spot.summitCode }}</td>
+              <td>{{ spot.frequency }}</td>
+              <td>{{ spot.mode }}</td>
+              <td>{{ spot.timeStamp | date: 'HH:mm' : 'UTC' }}</td>
+            </tr>
+          </ng-template>
+          <ng-template #emptymessage>
+            <tr><td colspan="5">No spots in the last hour.</td></tr>
+          </ng-template>
+        </p-table>
+      </p-tabpanel>
+    </p-tabpanels>
+  </p-tabs>
+</div>

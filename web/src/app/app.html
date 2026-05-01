@@ -1,0 +1,23 @@
+<p-toolbar styleClass="sota-toolbar">
+  <ng-template #start>
+    <span class="sota-title">📡 SOTA Watchtower</span>
+    <nav class="sota-nav">
+      <a routerLink="/map" routerLinkActive="active">Map</a>
+      <a routerLink="/alerts" routerLinkActive="active">Alerts</a>
+      <a routerLink="/config" routerLinkActive="active">Config</a>
+    </nav>
+  </ng-template>
+  <ng-template #end>
+    <p-button
+      [icon]="themeService.isDark() ? 'pi pi-sun' : 'pi pi-moon'"
+      [rounded]="true"
+      [text]="true"
+      (onClick)="themeService.toggle()"
+      [title]="themeService.isDark() ? 'Switch to light mode' : 'Switch to dark mode'"
+    />
+  </ng-template>
+</p-toolbar>
+
+<main class="sota-main">
+  <router-outlet />
+</main>
