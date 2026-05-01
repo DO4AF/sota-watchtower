@@ -383,7 +383,7 @@ Resources:
                     "x": 0,
                     "type": "log",
                     "properties": {
-                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message\n| sort @timestamp desc\n| limit 10000\n| filter @message like /\\QAPRS Callsign: \\E.*\\Q, APRS Latitude: \\E.*\\Q, APRS Longitude: \\E.*\\Q, APRS Altitude: \\E.*\\Q\n\\E/",
+                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message\n| sort @timestamp desc\n| limit 10000\n| filter @message like /APRS Callsign: .*, APRS Latitude: .*, APRS Longitude: .*, APRS Altitude: /",
                         "region": "eu-central-1",
                         "stacked": false,
                         "title": "APRS data stream",
@@ -443,7 +443,7 @@ Resources:
                     "x": 6,
                     "type": "log",
                     "properties": {
-                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message, @logStream, @log\n| sort @timestamp desc\n| limit 10000\n| filter @message like /\\QAPRS Callsign: \\E.*\\Q, APRS Latitude: \\E.*\\Q, APRS Longitude: \\E.*\\Q, APRS Altitude: \\E/\n| parse @message /\\QAPRS Callsign: \\E(?<callsign>[^,]+), APRS Latitude/\n| stats \n    count(if(callsign like /^D.*/, 1, null)) as D_Callsigns,\n    count(if(callsign like /^OE.*/, 1, null)) as OE_Callsigns,\n    count(if(!(callsign like /^D.*/ or callsign like /^OE.*/), 1, null)) as Other_Callsigns\n",
+                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message, @logStream, @log\n| sort @timestamp desc\n| limit 10000\n| filter @message like /APRS Callsign: .*, APRS Latitude: .*, APRS Longitude: .*, APRS Altitude: /\n| parse @message /APRS Callsign: (?<callsign>[^,]+), APRS Latitude/\n| stats \n    count(if(callsign like /^D.*/, 1, null)) as D_Callsigns,\n    count(if(callsign like /^OE.*/, 1, null)) as OE_Callsigns,\n    count(if(!(callsign like /^D.*/ or callsign like /^OE.*/), 1, null)) as Other_Callsigns\n",
                         "region": "eu-central-1",
                         "stacked": false,
                         "title": "Country",
@@ -457,7 +457,7 @@ Resources:
                     "x": 0,
                     "type": "log",
                     "properties": {
-                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message\n| parse @message /APRS Callsign: (?<callsign>[^\\s,]+), APRS Latitude: [^,]+, APRS Longitude: [^,]+, APRS Altitude: [^,]+/ \n| display @timestamp, callsign\n| sort @timestamp desc\n| limit 1\n| filter @message like /\\QAPRS Callsign: \\E.*\\Q, APRS Latitude: \\E.*\\Q, APRS Longitude: \\E.*\\Q, APRS Altitude: \\E.*\\Q\n\\E/",
+                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message\n| parse @message /APRS Callsign: (?<callsign>[^,]+), APRS Latitude: [^,]+, APRS Longitude: [^,]+, APRS Altitude: [^,]+/ \n| display @timestamp, callsign\n| sort @timestamp desc\n| limit 1\n| filter @message like /APRS Callsign: .*, APRS Latitude: .*, APRS Longitude: .*, APRS Altitude: /",
                         "region": "eu-central-1",
                         "stacked": false,
                         "title": "Last callsign",
