@@ -44,15 +44,26 @@ interface Freshness {
   pulse: boolean;
 }
 
+/**
+ * Parse ISO-8601 timestamps safely.
+ * Python stores DynamoDB timestamps with microseconds (6 decimal places, e.g.
+ * "2026-05-01T19:35:49.412395+00:00") but the ECMAScript date parser only
+ * guarantees 3 decimal places — extra digits may return NaN in some engines.
+ * Truncate to milliseconds before parsing.
+ */
+function parseTimestamp(ts: string): Date {
+  return new Date(ts.replace(/(\.\d{3})\d+/, '$1'));
+}
+
 function activatorFreshness(lastSeen: string): Freshness {
-  const ageMs  = Date.now() - new Date(lastSeen).getTime();
+  const ageMs  = Date.now() - parseTimestamp(lastSeen).getTime();
   const ageMin = ageMs / 60_000;
   if (ageMin < 5)  return { ageMin, color: '#00e676', opacity: 1.0,  label: `${Math.round(ageMin)}m ago`, pulse: true  };
-  if (ageMin < 15) return { ageMin, color: '#ffeb3b', opacity: 0.85, label: `${Math.round(ageMin)}m ago`, pulse: false };
-  if (ageMin < 30) return { ageMin, color: '#ff9800', opacity: 0.65, label: `${Math.round(ageMin)}m ago`, pulse: false };
+  if (ageMin < 15) return { ageMin, color: '#ffeb3b', opacity: 0.90, label: `${Math.round(ageMin)}m ago`, pulse: false };
+  if (ageMin < 30) return { ageMin, color: '#ff9800', opacity: 0.75, label: `${Math.round(ageMin)}m ago`, pulse: false };
   const h = Math.floor(ageMin / 60);
   const m = Math.round(ageMin % 60);
-  return { ageMin, color: '#9e9e9e', opacity: 0.40, label: h > 0 ? `${h}h ${m}m ago` : `${Math.round(ageMin)}m ago`, pulse: false };
+  return { ageMin, color: '#9e9e9e', opacity: 0.55, label: h > 0 ? `${h}h ${m}m ago` : `${Math.round(ageMin)}m ago`, pulse: false };
 }
 
 // ─── Activator icon ──────────────────────────────────────────────────────────
@@ -65,15 +76,15 @@ function makeActivatorIcon(callsign: string, freshness: Freshness): L.DivIcon {
     className: '',
     html: `
       <div class="walker-marker" style="opacity:${freshness.opacity}">
-        <div class="walker-marker__badge" style="border-color:${freshness.color};background:${freshness.color}22">
+        <div class="walker-marker__badge" style="border-color:${freshness.color};background:${freshness.color}33;box-shadow:0 0 8px ${freshness.color}66">
           ${pulse}
           <span class="walker-marker__emoji">🚶</span>
         </div>
-        <span class="walker-marker__label">${callsign}</span>
+        <span class="walker-marker__label" style="border-color:${freshness.color}66">${callsign}</span>
       </div>`,
-    iconSize:    [40, 48],
-    iconAnchor:  [20, 20],
-    popupAnchor: [0, -24],
+    iconSize:    [52, 56],
+    iconAnchor:  [26, 22],
+    popupAnchor: [0, -28],
   });
 }
 
@@ -223,13 +234,14 @@ export class MapComponent implements OnInit, OnDestroy {
           const color      = summitColor(points);
           const latlng: L.LatLngExpression = [coords[1], coords[0]];
 
-          // Uniform small circle — same size for all summits
+          // Circle scaled by points: 1pt=5px, 10pt=8px
+          const radius = Math.round(5 + (points - 1) * 0.33);
           const m = L.circleMarker(latlng, {
-            radius:      5,
+            radius,
             fillColor:   color,
-            color:       'rgba(0,0,0,0.30)',
-            weight:      1,
-            fillOpacity: 0.9,
+            color:       'rgba(255,255,255,0.45)',
+            weight:      1.5,
+            fillOpacity: 0.92,
             opacity:     1,
           });
 

@@ -149,46 +149,49 @@ html, body {
 
 .walker-marker {
   position: relative;
-  width: 40px;
-  height: 48px;
+  width: 52px;
+  height: 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
 
   // Hiker badge — circular colored ring with emoji inside
   &__badge {
-    width: 30px;
-    height: 30px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    border: 2.5px solid;
+    border: 3px solid;
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
     z-index: 2;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(2px);
   }
 
   &__emoji {
-    font-size: 1rem;
+    font-size: 1.2rem;
     line-height: 1;
-    // Remove default text shadow brightness variation across OS
     filter: brightness(1);
   }
 
   &__label {
-    margin-top: 2px;
-    font-size: 8.5px;
+    margin-top: 3px;
+    font-size: 9px;
     font-weight: 700;
-    font-family: 'Courier New', monospace;
+    font-family: 'Inter', system-ui, sans-serif;
     color: #fff;
     white-space: nowrap;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 1), 0 0 6px rgba(0, 0, 0, 0.8);
-    letter-spacing: 0.04em;
-    background: rgba(0, 0, 0, 0.55);
-    padding: 1px 4px;
-    border-radius: 3px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 1), 0 0 8px rgba(0, 0, 0, 0.9);
+    letter-spacing: 0.03em;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid transparent;
     text-align: center;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
@@ -197,18 +200,18 @@ html, body {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: 2px solid;
   pointer-events: none;
-  animation: walker-pulse-anim 2s ease-out infinite;
+  animation: walker-pulse-anim 1.8s ease-out infinite;
   z-index: 1;
 }
 
 @keyframes walker-pulse-anim {
   0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
-  100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
 }
 
 // ─── Summit glow (alerted summits) ───────────────────────────────────────────
