@@ -2,56 +2,79 @@
 
 ## Current Status (as of 2026-05-01)
 - ✅ Backend fully deployed (sota-watchtower-stack in eu-central-1)
-- ✅ Frontend live on Amplify (build #13 succeeded)
-- ✅ APRS walker positions working (32+ positions in API)
-- ✅ CloudWatch dashboard fixed (no more "Network Failure")
-- ✅ Dark mode default
-- ✅ Inter font
+- ✅ Frontend live on Amplify (build #22 deploying)
+- ✅ **SummitsTable in DynamoDB** — 18,274 summits across 18 European associations
+- ✅ **RefreshSummitsFunction** — downloads SOTA CSV daily at 02:00 UTC via EventBridge
+- ✅ **APRS walker positions working** — 73+ positions, fresh data (S56CT-7 etc.)
+- ✅ **Walker timestamp bug fixed** — microsecond ISO-8601 strings from Python now parsed correctly
+- ✅ Walker markers enlarged (36px badge, 52×56 icon) with color glow
+- ✅ Summit markers scaled by points (1pt→5px, 10pt→8px) with white stroke
+- ✅ CloudWatch dashboard APRS Signal alarm = green
+- ✅ Dark mode default (p-dark on html element, ThemeService forces it)
+- ✅ Inter font (Google Fonts)
 - ✅ Left sidebar navigation
-- ✅ Summit markers with points-based coloring (no clustering)
-- ✅ Walker traces with configurable duration
-- ✅ Debug event log panel
-- ✅ Walker freshness indicator
+- ✅ Walker freshness: <5m=green/pulse, 5-15m=yellow, 15-30m=orange, >30m=gray (min opacity 0.55)
+- ✅ Walker traces (polyline history) with configurable duration
 
 ## Recent Changes
 
-### 2026-05-01 — Major Feature Release
-**Backend:**
-- Added `AprsPositionsTable` (DynamoDB) with composite key (callsign PK + timestamp SK) and 2h TTL
-- Added `GetAprsPositionsFunction` — unauthenticated GET /aprs-positions endpoint
-- Fixed `ActivationZoneMonitorFunction`: was using TABLE_ARN instead of TABLE_NAME for DynamoDB
-- Fixed CloudWatch dashboard: duplicate Export key causing "Network Failure" error
-- Fixed .env: FREQUENCY_FILTER_PATTERN must be single-quoted
+### 2026-05-01 — Backend: DynamoDB Summit Database
 
-**Frontend:**
-- Dark mode is now the default
-- Inter font via Google Fonts
-- CARTO Dark Matter / Voyager map tiles
-- Left sidebar navigation (replaces top toolbar)
-- Summit markers: colored circles by points (green→red), no clustering
-- Walker markers: large icons with freshness-based opacity
-- Walker traces: polylines showing historical positions
-- Debug event log panel (toggleable)
-- Polished login page, alerts table, map legend
+**New resources:**
+- `SummitsTable` (DynamoDB): PK=summitCode, GSI=AssociationIndex (PK=association, SK=summitCode)
+- `RefreshSummitsFunction`: downloads storage.sota.org.uk/summitslist.csv, filters ValidFrom/ValidTo,
+  batch-writes to SummitsTable. EventBridge cron(0 2 * * ? *).
+- `GetSummitsFunction`: queries SummitsTable GSI by association; reads association list from
+  ConfigTable.sotaAssociations (default: DL,OE,HB,HB0,F,I,PA,ON,LX,9A,OK,SP,OM,HA,S5,YU,YO,LZ)
 
-## Known Issues / TODOs
-- Walker trace history requires backend to store multiple positions per callsign (done via composite key)
-- Trace duration is configurable in UI (localStorage), default 2 hours
-- Summit CSV has no header row — columns are positional
-- leaflet and leaflet.markercluster are CommonJS (warning in build, not an error)
+**Why:** Old approach bundled summitslist.csv in Lambda package and downloaded it on every invocation →
+timeout. DynamoDB query now returns 18,274 summits in <1 second.
 
-## Infrastructure Notes
-- EC2 instance may be replaced/recreated by CloudFormation if UserData changes
-- Amplify build fails if TypeScript errors exist — always run `npx ng build` locally before pushing
-- The .env FREQUENCY_FILTER_PATTERN must be quoted: `FREQUENCY_FILTER_PATTERN='...'`
+### 2026-05-01 — Frontend: Walker Visibility Bug Fix
+
+**Bug:** Python's `datetime.now(timezone.utc).isoformat()` generates timestamps with microseconds
+(6 decimal places, e.g. `2026-05-01T19:35:49.412395+00:00`). JavaScript's `Date()` constructor
+only guarantees 3 decimal places (milliseconds). Extra digits cause `Invalid Date` / NaN in some
+browser engines → `activatorFreshness()` returns NaN for all ages → all walkers display as
+faded gray blobs at opacity 0.40.
+
+**Fix:** `parseTimestamp()` strips digits beyond 3 decimal places via regex before `new Date()`.
+Walkers now correctly show green/yellow/orange/gray based on actual age.
+
+**Additional improvements:**
+- Minimum walker opacity raised 0.40 → 0.55
+- Walker badge enlarged 30px → 36px with color glow box-shadow
+- Walker icon size 40×48 → 52×56
+- Summit circle radius scales with points (1pt=5px, 10pt=8px), added white stroke
+- Walker label uses Inter font instead of Courier New
+
+### 2026-05-01 — Previous Session (Major Feature Release)
+- Backend: AprsPositionsTable, GetAprsPositionsFunction, ActivationZoneMonitorFunction fixes
+- Frontend: Full UI overhaul (dark mode, Inter, sidebar nav, walker markers, summit coloring, login page)
+
+## Known Issues / Limitations
+- CloudWatch dashboard "StartQuery Network Failure": this is a **browser-side** issue
+  (ad blocker, network, or content security policy). The AWS infrastructure is correctly
+  configured. The APRS Signal alarm widget works (green = ActivationZoneMonitorFunction invoked).
+- leaflet is CommonJS (warning in build, not an error)
+- APRS listener filter: pedestrian symbols (`[`, `p`) only, speed <10 km/h
 
 ## API Endpoints Summary
-| Method | Path | Auth | Function |
-|--------|------|------|----------|
-| GET | /aprs-positions | None | GetAprsPositionsFunction |
-| GET | /summits | Cognito | GetSummitsFunction |
-| GET | /alerts | Cognito | GetAlertsWebFunction |
-| GET | /spots | Cognito | GetSpotsWebFunction |
-| GET | /config | Cognito | GetConfigFunction |
-| PUT | /config | Cognito | PutConfigFunction |
-| POST | /notify | None | HamAlertProcessFunction (via HamAlertApi) |
+| Method | Path          | Auth    | Function                    |
+|--------|---------------|---------|-----------------------------|
+| GET    | /aprs-positions | None  | GetAprsPositionsFunction    |
+| GET    | /summits      | None    | GetSummitsFunction          |
+| GET    | /alerts       | Cognito | GetAlertsWebFunction        |
+| GET    | /spots        | Cognito | GetSpotsWebFunction         |
+| GET    | /config       | Cognito | GetConfigFunction           |
+| PUT    | /config       | Cognito | PutConfigFunction           |
+| POST   | /notify       | None    | HamAlertProcessFunction (HamAlertApi) |
+
+## Infrastructure Notes
+- Stack: `sota-watchtower-stack` in `eu-central-1`
+- Amplify App ID: `d1e96ec1sckzck`
+- SummitsTable: `sota-watchtower-stack-SummitsTable-A0P6RDXP8QT3`
+- AprsPositionsTable: single PK=callsign, positions stored as list attribute (up to 100 track points)
+- EC2 instance may be replaced/recreated by CloudFormation if UserData/AMI changes
+- The .env FREQUENCY_FILTER_PATTERN must be single-quoted
+- Always run `cd web && npx ng build --configuration production` before git push
