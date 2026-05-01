@@ -2,6 +2,7 @@
 # deploy.sh — Deploy the SAM stack and sync Amplify environment variables.
 # Usage: ./deploy.sh [extra sam deploy args]
 set -euo pipefail
+export AWS_PAGER=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SAMCONFIG="$SCRIPT_DIR/samconfig.toml"
