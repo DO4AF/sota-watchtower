@@ -7,8 +7,8 @@
     </div>
 
     <form class="login-card__form" (ngSubmit)="login()" #loginForm="ngForm">
-      @if (error()) {
-        <p-message severity="error" [text]="error()!" styleClass="login-error" />
+      @if (error) {
+        <p-message severity="error" [text]="error" styleClass="login-error" />
       }
 
       <div class="form-field">
@@ -45,7 +45,7 @@
         type="submit"
         label="Sign in"
         icon="pi pi-sign-in"
-        [loading]="loading()"
+        [loading]="loading"
         [disabled]="!email || !password"
         styleClass="login-btn"
         [fluid]="true"

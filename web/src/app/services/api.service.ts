@@ -27,6 +27,16 @@ export interface AprsPosition {
   lastSeen: string;
 }
 
+export interface AppConfig {
+  telegramBotToken: string;
+  telegramGroupId: string;
+  telegramUserId: string;
+  frequencyFilterPattern: string;
+  sotaAssociations: string;
+  activationZoneDistanceMeters: string;
+  activationZoneAltitudeDeltaMeters: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
@@ -67,7 +77,7 @@ export class ApiService {
     );
   }
 
-  putConfig(config: Record<string, unknown>): Observable<unknown> {
+  putConfig(config: AppConfig | Record<string, unknown>): Observable<unknown> {
     return this.authHeaders().pipe(
       switchMap(headers => this.http.put(`${this.base}/config`, config, { headers }))
     );

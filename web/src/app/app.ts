@@ -15,3 +15,6 @@ import { ThemeService } from './services/theme.service';
 export class AppComponent {
   readonly themeService = inject(ThemeService);
 }
+
+// Alias for main.ts compatibility
+export { AppComponent as App };

@@ -69,15 +69,15 @@ export class ConfigComponent implements OnInit {
   ngOnInit(): void {
     this.apiService.getConfig().subscribe({
       next: cfg => {
-        this.telegramBotToken = cfg.telegramBotToken ?? '';
-        this.telegramGroupId = cfg.telegramGroupId ?? '';
-        this.telegramUserId = cfg.telegramUserId ?? '';
-        this.frequencyFilterPattern = cfg.frequencyFilterPattern ?? '';
-        this.selectedAssociations = cfg.sotaAssociations
-          ? JSON.parse(cfg.sotaAssociations)
+        this.telegramBotToken = (cfg['telegramBotToken'] as string) ?? '';
+        this.telegramGroupId = (cfg['telegramGroupId'] as string) ?? '';
+        this.telegramUserId = (cfg['telegramUserId'] as string) ?? '';
+        this.frequencyFilterPattern = (cfg['frequencyFilterPattern'] as string) ?? '';
+        this.selectedAssociations = cfg['sotaAssociations']
+          ? JSON.parse(cfg['sotaAssociations'] as string)
           : ['DL', 'OE', 'DM'];
-        this.activationZoneDistance = Number(cfg.activationZoneDistanceMeters ?? 300);
-        this.activationZoneAltitude = Number(cfg.activationZoneAltitudeDeltaMeters ?? 25);
+        this.activationZoneDistance = Number(cfg['activationZoneDistanceMeters'] ?? 300);
+        this.activationZoneAltitude = Number(cfg['activationZoneAltitudeDeltaMeters'] ?? 25);
         this.originalJson = this.toJson();
         this.loading.set(false);
       },
