@@ -88,15 +88,19 @@ function makeActivatorIcon(callsign: string, freshness: Freshness): L.DivIcon {
   });
 }
 
-// ─── Summit label data ───────────────────────────────────────────────────────
+// ─── Summit raw data (stored in memory, no marker reference) ─────────────────
 
-interface SummitLabelData {
-  marker: L.CircleMarker;
-  latlng: L.LatLngExpression;
-  code: string;
-  name: string;
+interface SummitRecord {
+  code:       string;
+  name:       string;
   elevationM: number;
-  points: number;
+  assoc:      string;
+  region:     string;
+  points:     number;
+  color:      string;
+  radius:     number;
+  lat:        number;
+  lon:        number;
 }
 
 // ─── Activator state ─────────────────────────────────────────────────────────
@@ -107,6 +111,11 @@ interface ActivatorState {
   marker:    L.Marker;
   trace:     L.Polyline;
 }
+
+// ─── Viewport pan/zoom debounce ───────────────────────────────────────────────
+
+/** How much to pad beyond the visible bounds when deciding which summits to render (fraction). */
+const VIEWPORT_PAD = 0.5;
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -122,17 +131,34 @@ export class MapComponent implements OnInit, OnDestroy {
   private ws       = inject(WebSocketService);
   private eventLog = inject(EventLogService);
 
+  // Canvas renderer — all CircleMarkers share a single <canvas> element
+  private canvasRenderer = L.canvas({ padding: VIEWPORT_PAD });
+
   // Map internals
   private map!:           L.Map;
   private tileLayer!:     L.TileLayer;
-  private glowLayer     = L.layerGroup();   // alert glow rings (behind summits)
-  private summitLayer   = L.layerGroup();
+  private glowLayer      = L.layerGroup();   // alert glow rings (behind summits)
+  private summitLayer    = L.layerGroup();   // active CircleMarkers
   private activatorLayer = L.layerGroup();
-  private labelLayer    = L.layerGroup();   // zoom-dependent summit labels
+  private labelLayer     = L.layerGroup();   // zoom-dependent summit labels
 
   private activators     = new Map<string, ActivatorState>();
-  private summitData:    SummitLabelData[] = [];
-  private alertedSummits = new Set<string>();
+
+  /**
+   * All summit data received from the API, held in memory.
+   * CircleMarkers are created on demand when a summit enters the viewport.
+   */
+  private allSummits:      SummitRecord[]                    = [];
+  private alertedSummits   = new Set<string>();
+
+  /**
+   * Index of currently rendered markers by summit code.
+   * Each entry is [circleMarker, glowMarker|null].
+   */
+  private renderedMarkers  = new Map<string, [L.CircleMarker, L.CircleMarker | null]>();
+
+  /** Debounce timer for viewport updates. */
+  private viewportTimer?: ReturnType<typeof setTimeout>;
 
   // Subscriptions
   private refreshSub?: Subscription;
@@ -151,6 +177,7 @@ export class MapComponent implements OnInit, OnDestroy {
     zoom:               7,
     zoomControl:        true,
     attributionControl: true,
+    preferCanvas:       true,   // use canvas for all vector layers
   };
 
   ngOnInit(): void {
@@ -173,7 +200,7 @@ export class MapComponent implements OnInit, OnDestroy {
     this.wsSub = this.ws.messages$.subscribe(msg =>
       this.eventLog.info('WebSocket', JSON.stringify(msg))
     );
-    map.on('zoomend moveend', () => this.updateSummitLabels());
+    map.on('zoomend moveend', () => this.scheduleViewportUpdate());
     this.eventLog.info('Map', 'Map ready');
   }
 
@@ -195,15 +222,14 @@ export class MapComponent implements OnInit, OnDestroy {
   // ─── Summits + alert glow ────────────────────────────────────────────────
 
   private loadSummits(): void {
-    // Load summits and alerts in parallel; alerts failure is non-fatal
     forkJoin({
       geojson: this.api.getSummits(),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       alerts:  this.api.getAlerts().pipe(catchError(() => of([] as any[]))),
     }).subscribe({
       next: ({ geojson, alerts }) => {
-        // Build the set of summit codes that have upcomingactivations (today → +7 days)
-        const now      = Date.now();
+        // Build the set of summit codes that have upcoming activations (today → +7 days)
+        const now       = Date.now();
         const sevenDays = 7 * 24 * 3_600_000;
         this.alertedSummits.clear();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -216,77 +242,33 @@ export class MapComponent implements OnInit, OnDestroy {
           }
         });
 
-        this.summitLayer.clearLayers();
-        this.glowLayer.clearLayers();
-        this.summitData = [];
-        let count = 0;
-
+        // Parse all summit features into lightweight records
+        this.allSummits = [];
         geojson.features.forEach(f => {
           const props  = f.properties as Record<string, unknown>;
           const coords = (f.geometry as GeoJSON.Point).coordinates;
+          const points = Number(props['points'] ?? 1);
 
-          const code       = String(props['summitCode']      ?? '');
-          const name       = String(props['peakName']        ?? '');
-          const elevationM = Number(props['elevationM']      ?? 0);
-          const assoc      = String(props['associationName'] ?? '');
-          const region     = String(props['region']          ?? '');
-          const points     = Number(props['points']          ?? 1);
-          const color      = summitColor(points);
-          const latlng: L.LatLngExpression = [coords[1], coords[0]];
-
-          // Circle scaled by points: 1pt=5px, 10pt=8px
-          const radius = Math.round(5 + (points - 1) * 0.33);
-          const m = L.circleMarker(latlng, {
-            radius,
-            fillColor:   color,
-            color:       'rgba(255,255,255,0.45)',
-            weight:      1.5,
-            fillOpacity: 0.92,
-            opacity:     1,
+          this.allSummits.push({
+            code:       String(props['summitCode']      ?? ''),
+            name:       String(props['peakName']        ?? ''),
+            elevationM: Number(props['elevationM']      ?? 0),
+            assoc:      String(props['associationName'] ?? ''),
+            region:     String(props['region']          ?? ''),
+            points,
+            color:      summitColor(points),
+            radius:     Math.round(5 + (points - 1) * 0.33),  // 1pt=5px, 10pt=8px
+            lat:        coords[1],
+            lon:        coords[0],
           });
-
-          m.bindTooltip(
-            `<b>${code}</b><br>${name}<br>` +
-            `${elevationM} m · ${points} pt<br>` +
-            `<small style="color:#999">${assoc}${region ? ' / ' + region : ''}</small>`,
-            { direction: 'top', className: 'sota-tooltip' }
-          );
-
-          const sotlasUrl = `https://sotl.as/summits/${code}`;
-          m.bindPopup(`
-            <div class="sota-popup">
-              <div class="sota-popup__title">${code}</div>
-              <div class="sota-popup__subtitle">${name}</div>
-              <div class="sota-popup__row"><span>Elevation</span><span>${elevationM} m</span></div>
-              <div class="sota-popup__row"><span>Points</span><span>${points} pt</span></div>
-              <div class="sota-popup__row"><span>Association</span><span>${assoc}</span></div>
-              ${region ? `<div class="sota-popup__row"><span>Region</span><span>${region}</span></div>` : ''}
-              <a href="${sotlasUrl}" target="_blank" rel="noopener" class="sota-popup__btn">View on SOTLAS ↗</a>
-            </div>`, { className: 'sota-popup-wrap' });
-
-          this.summitLayer.addLayer(m);
-          this.summitData.push({ marker: m, latlng, code, name, elevationM, points });
-          count++;
-
-          // Glow ring behind summit marker when an activation is planned
-          if (this.alertedSummits.has(code)) {
-            L.circleMarker(latlng, {
-              radius:      10,
-              fillColor:   color,
-              color:       color,
-              weight:      3,
-              fillOpacity: 0,
-              opacity:     0.8,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              className:   'summit-glow' as any,
-            }).addTo(this.glowLayer);
-          }
         });
 
-        this.summitCount.set(count);
+        this.summitCount.set(this.allSummits.length);
         this.loading.set(false);
-        this.eventLog.success('Summits', `Loaded ${count} summits`);
-        this.updateSummitLabels();
+        this.eventLog.success('Summits', `Loaded ${this.allSummits.length} summits`);
+
+        // Initial viewport render
+        this.updateViewport();
       },
       error: err => {
         this.eventLog.error('Summits', `Failed: ${err.message}`);
@@ -295,29 +277,129 @@ export class MapComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ─── Viewport-based marker management ───────────────────────────────────
+
+  /**
+   * Debounce viewport updates so rapid pan/zoom events don't cause excessive DOM work.
+   * Uses 80ms delay — smooth for continuous panning.
+   */
+  private scheduleViewportUpdate(): void {
+    if (this.viewportTimer) clearTimeout(this.viewportTimer);
+    this.viewportTimer = setTimeout(() => this.updateViewport(), 80);
+  }
+
+  /**
+   * Add markers for summits now inside the padded bounds,
+   * remove markers for summits now outside it.
+   * All CircleMarkers use the shared canvas renderer.
+   */
+  private updateViewport(): void {
+    if (!this.map || this.allSummits.length === 0) return;
+
+    const bounds = this.map.getBounds().pad(VIEWPORT_PAD);
+    const zoom   = this.map.getZoom();
+
+    // --- Remove markers that have scrolled out of the padded bounds ---
+    const toRemove: string[] = [];
+    this.renderedMarkers.forEach(([m, glow], code) => {
+      if (!bounds.contains(m.getLatLng())) {
+        this.summitLayer.removeLayer(m);
+        if (glow) this.glowLayer.removeLayer(glow);
+        toRemove.push(code);
+      }
+    });
+    toRemove.forEach(code => this.renderedMarkers.delete(code));
+
+    // --- Add markers for summits now in bounds that aren't rendered yet ---
+    this.allSummits.forEach(s => {
+      if (this.renderedMarkers.has(s.code)) return;
+      if (!bounds.contains([s.lat, s.lon])) return;
+
+      const latlng: L.LatLngExpression = [s.lat, s.lon];
+
+      const m = L.circleMarker(latlng, {
+        renderer:    this.canvasRenderer,
+        radius:      s.radius,
+        fillColor:   s.color,
+        color:       'rgba(255,255,255,0.45)',
+        weight:      1.5,
+        fillOpacity: 0.92,
+        opacity:     1,
+      });
+
+      m.bindTooltip(
+        `<b>${s.code}</b><br>${s.name}<br>` +
+        `${s.elevationM} m · ${s.points} pt<br>` +
+        `<small style="color:#999">${s.assoc}${s.region ? ' / ' + s.region : ''}</small>`,
+        { direction: 'top', className: 'sota-tooltip' }
+      );
+
+      const sotlasUrl = `https://sotl.as/summits/${s.code}`;
+      m.bindPopup(`
+        <div class="sota-popup">
+          <div class="sota-popup__title">${s.code}</div>
+          <div class="sota-popup__subtitle">${s.name}</div>
+          <div class="sota-popup__row"><span>Elevation</span><span>${s.elevationM} m</span></div>
+          <div class="sota-popup__row"><span>Points</span><span>${s.points} pt</span></div>
+          <div class="sota-popup__row"><span>Association</span><span>${s.assoc}</span></div>
+          ${s.region ? `<div class="sota-popup__row"><span>Region</span><span>${s.region}</span></div>` : ''}
+          <a href="${sotlasUrl}" target="_blank" rel="noopener" class="sota-popup__btn">View on SOTLAS ↗</a>
+        </div>`, { className: 'sota-popup-wrap' });
+
+      this.summitLayer.addLayer(m);
+
+      // Glow ring for alerted summit
+      let glow: L.CircleMarker | null = null;
+      if (this.alertedSummits.has(s.code)) {
+        glow = L.circleMarker(latlng, {
+          renderer:    this.canvasRenderer,
+          radius:      10,
+          fillColor:   s.color,
+          color:       s.color,
+          weight:      3,
+          fillOpacity: 0,
+          opacity:     0.8,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          className:   'summit-glow' as any,
+        });
+        this.glowLayer.addLayer(glow);
+      }
+
+      this.renderedMarkers.set(s.code, [m, glow]);
+    });
+
+    // Update labels (only at high zoom)
+    this.updateSummitLabels(bounds, zoom);
+  }
+
   // ─── Summit labels at high zoom ──────────────────────────────────────────
 
-  private updateSummitLabels(): void {
+  private updateSummitLabels(bounds: L.LatLngBounds, zoom: number): void {
     this.labelLayer.clearLayers();
-    if (!this.map || this.map.getZoom() < this.LABEL_ZOOM) return;
+    if (zoom < this.LABEL_ZOOM) return;
 
-    const bounds = this.map.getBounds().pad(0.05);
-    this.summitData
-      .filter(d => bounds.contains(d.marker.getLatLng()))
-      .forEach(d => {
-        const label = L.marker(d.latlng, {
-          icon: L.divIcon({
-            className: 'summit-label',
-            // Single block, no <br>, centered text below the marker
-            html:       `<div class="summit-label__inner"><span class="summit-label__code">${d.code}</span><span class="summit-label__name">${d.name}</span></div>`,
-            iconSize:   [120, 30],
-            iconAnchor: [60, -10],  // horizontally centered, positioned below marker
-          }),
-          interactive: false,
-          zIndexOffset: -200,
-        });
-        this.labelLayer.addLayer(label);
+    // Tighter bound for labels (no padding — only show labels for what's on screen)
+    const labelBounds = this.map.getBounds().pad(0.05);
+
+    this.renderedMarkers.forEach(([m], code) => {
+      const latlng = m.getLatLng();
+      if (!labelBounds.contains(latlng)) return;
+
+      const s = this.allSummits.find(x => x.code === code);
+      if (!s) return;
+
+      const label = L.marker(latlng, {
+        icon: L.divIcon({
+          className: 'summit-label',
+          html:       `<div class="summit-label__inner"><span class="summit-label__code">${s.code}</span><span class="summit-label__name">${s.name}</span></div>`,
+          iconSize:   [120, 30],
+          iconAnchor: [60, -10],
+        }),
+        interactive:  false,
+        zIndexOffset: -200,
       });
+      this.labelLayer.addLayer(label);
+    });
   }
 
   // ─── Activators ─────────────────────────────────────────────────────────
@@ -434,6 +516,7 @@ export class MapComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.viewportTimer) clearTimeout(this.viewportTimer);
     this.refreshSub?.unsubscribe();
     this.wsSub?.unsubscribe();
     this.ws.disconnect();

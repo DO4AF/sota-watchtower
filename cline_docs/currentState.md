@@ -15,8 +15,31 @@
 - ✅ Left sidebar navigation
 - ✅ Walker freshness: <5m=green/pulse, 5-15m=yellow, 15-30m=orange, >30m=gray (min opacity 0.55)
 - ✅ Walker traces (polyline history) with configurable duration
+- ✅ **Map performance: canvas renderer + viewport-based loading** — all 18k summits render smoothly
 
 ## Recent Changes
+
+### 2026-05-01 — Frontend: Map Performance & Missing Summits Fix
+
+**Problem:** All 18,274 summit `CircleMarker`s were added to the map as SVG DOM elements at once.
+The browser struggled to manage this many nodes → lag on pan/zoom, and some summits (e.g. Germany)
+appearing to be missing due to rendering failures.
+
+**Fix — two-pronged approach:**
+
+1. **Canvas renderer** (`L.canvas({ padding: 0.5 })`): all `CircleMarker`s now share a single
+   `<canvas>` element instead of thousands of SVG nodes. Canvas handles 50k+ points without issue.
+   Enabled via `preferCanvas: true` in `mapOptions` and explicit `renderer:` per marker.
+
+2. **Viewport-based marker management**: summit data is stored in memory as lightweight
+   `SummitRecord[]` objects (no Leaflet objects). `updateViewport()` runs on `moveend`/`zoomend`
+   (debounced 80ms) and:
+   - Adds `CircleMarker`s only for summits within `getBounds().pad(0.5)` (visible + 50% buffer)
+   - Removes markers that have scrolled outside the buffered bounds
+   - Uses a `Map<code, [CircleMarker, glowMarker|null]>` index for O(1) add/remove
+
+This means at any moment only ~2–5k markers exist on the canvas (depending on zoom/area),
+even though all 18k summits are held in memory and become visible as you pan.
 
 ### 2026-05-01 — Backend: DynamoDB Summit Database
 
