@@ -26,19 +26,44 @@ def fetch_alerts():
     return alerts
 
 def store_aprs_position(callsign, latitude, longitude, altitude):
-    """Store APRS walker position in DynamoDB with 2-hour TTL."""
+    """Store APRS activator position in DynamoDB with 2-hour TTL.
+
+    Maintains a rolling history of up to 100 positions so the frontend
+    can draw a trace path.  Uses get_item + put_item (single PK means
+    no sort-key history, so we store the list inside the item).
+    """
     table_name = os.getenv('APRSPOSITIONSTABLE_TABLE_NAME')
     if not table_name:
         return
     table = dynamodb.Table(table_name)
+    now = datetime.now(timezone.utc).isoformat()
     ttl = int(time.time()) + 7200  # 2 hours TTL
-    table.put_item(Item={
-        'callsign': callsign,
-        'latitude': str(latitude),
+
+    new_point = {
+        'latitude':  str(latitude),
         'longitude': str(longitude),
-        'altitude': str(altitude),
-        'lastSeen': datetime.now(timezone.utc).isoformat(),
-        'ttl': ttl,
+        'altitude':  str(altitude),
+        'timestamp': now,
+    }
+
+    # Fetch existing positions list (may not exist yet)
+    try:
+        response = table.get_item(Key={'callsign': callsign})
+        positions = list(response.get('Item', {}).get('positions', []))
+    except Exception:
+        positions = []
+
+    positions.append(new_point)
+    positions = positions[-100:]  # keep last 100 points (~2 h at 1 pkt/min)
+
+    table.put_item(Item={
+        'callsign':  callsign,
+        'latitude':  str(latitude),
+        'longitude': str(longitude),
+        'altitude':  str(altitude),
+        'lastSeen':  now,
+        'ttl':       ttl,
+        'positions': positions,
     })
 
 def notify_telegram(chat_id, text):

@@ -19,12 +19,21 @@ export interface SotaSpot {
   timeStamp: string;
 }
 
-export interface AprsPosition {
-  callsign: string;
-  latitude: string;
+export interface TrackPoint {
+  latitude:  string;
   longitude: string;
-  altitude: string;
-  lastSeen: string;
+  altitude:  string;
+  timestamp: string;
+}
+
+export interface AprsPosition {
+  callsign:  string;
+  latitude:  string;
+  longitude: string;
+  altitude:  string;
+  lastSeen:  string;
+  /** Rolling position history stored inside the DynamoDB item for trace rendering */
+  positions?: TrackPoint[];
 }
 
 export interface AppConfig {

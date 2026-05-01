@@ -9,31 +9,32 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LeafletModule } from '@bluehalo/ngx-leaflet';
 import * as L from 'leaflet';
-import { interval, Subscription } from 'rxjs';
+import { forkJoin, interval, Subscription } from 'rxjs';
+import { catchError, of } from 'rxjs';
 import { ApiService, AprsPosition } from '../../services/api.service';
 import { WebSocketService } from '../../services/websocket.service';
 import { EventLogService } from '../../services/event-log.service';
 
-// ─── Summit point colors (1-10, green → red) ─────────────────────────────────
+// ─── Summit point colors — SOTLAS color scheme ───────────────────────────────
 
 const SUMMIT_COLORS: Record<number, string> = {
-  1:  '#00c853',
-  2:  '#64dd17',
-  3:  '#aeea00',
-  4:  '#ffd600',
-  5:  '#ffab00',
-  6:  '#ff6d00',
-  7:  '#dd2c00',
-  8:  '#c62828',
-  9:  '#b71c1c',
-  10: '#880e4f',
+  1:  '#4CAF50',   // green
+  2:  '#8BC34A',   // light green
+  3:  '#CDDC39',   // lime
+  4:  '#FFEB3B',   // yellow
+  5:  '#FFC107',   // amber
+  6:  '#FF9800',   // orange
+  7:  '#FF5722',   // deep orange
+  8:  '#F44336',   // red
+  9:  '#E91E63',   // pink
+  10: '#9C27B0',   // purple
 };
 
 function summitColor(pts: number): string {
   return SUMMIT_COLORS[Math.max(1, Math.min(10, pts))] ?? '#aaa';
 }
 
-// ─── Walker freshness ────────────────────────────────────────────────────────
+// ─── Activator freshness ─────────────────────────────────────────────────────
 
 interface Freshness {
   ageMin: number;
@@ -43,10 +44,10 @@ interface Freshness {
   pulse: boolean;
 }
 
-function walkerFreshness(lastSeen: string): Freshness {
-  const ageMs = Date.now() - new Date(lastSeen).getTime();
+function activatorFreshness(lastSeen: string): Freshness {
+  const ageMs  = Date.now() - new Date(lastSeen).getTime();
   const ageMin = ageMs / 60_000;
-  if (ageMin < 5)  return { ageMin, color: '#00e676', opacity: 1.0,  label: `${Math.round(ageMin)}m ago`, pulse: true };
+  if (ageMin < 5)  return { ageMin, color: '#00e676', opacity: 1.0,  label: `${Math.round(ageMin)}m ago`, pulse: true  };
   if (ageMin < 15) return { ageMin, color: '#ffeb3b', opacity: 0.85, label: `${Math.round(ageMin)}m ago`, pulse: false };
   if (ageMin < 30) return { ageMin, color: '#ff9800', opacity: 0.65, label: `${Math.round(ageMin)}m ago`, pulse: false };
   const h = Math.floor(ageMin / 60);
@@ -54,10 +55,9 @@ function walkerFreshness(lastSeen: string): Freshness {
   return { ageMin, color: '#9e9e9e', opacity: 0.40, label: h > 0 ? `${h}h ${m}m ago` : `${Math.round(ageMin)}m ago`, pulse: false };
 }
 
-// ─── Walker hiker icon ────────────────────────────────────────────────────────
-// Distinct from summit circle markers: uses 🚶 emoji in a color-coded badge.
+// ─── Activator icon ──────────────────────────────────────────────────────────
 
-function makeWalkerIcon(callsign: string, freshness: Freshness): L.DivIcon {
+function makeActivatorIcon(callsign: string, freshness: Freshness): L.DivIcon {
   const pulse = freshness.pulse
     ? `<div class="walker-pulse" style="border-color:${freshness.color}"></div>`
     : '';
@@ -77,7 +77,7 @@ function makeWalkerIcon(callsign: string, freshness: Freshness): L.DivIcon {
   });
 }
 
-// ─── Summit label data ────────────────────────────────────────────────────────
+// ─── Summit label data ───────────────────────────────────────────────────────
 
 interface SummitLabelData {
   marker: L.CircleMarker;
@@ -88,21 +88,21 @@ interface SummitLabelData {
   points: number;
 }
 
-// ─── Walker state ─────────────────────────────────────────────────────────────
+// ─── Activator state ─────────────────────────────────────────────────────────
 
-interface WalkerState {
-  callsign: string;
+interface ActivatorState {
+  callsign:  string;
   positions: AprsPosition[];
-  marker: L.Marker;
-  trace: L.Polyline;
+  marker:    L.Marker;
+  trace:     L.Polyline;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 @Component({
-  selector: 'app-map',
-  standalone: true,
-  imports: [CommonModule, FormsModule, LeafletModule],
+  selector:    'app-map',
+  standalone:  true,
+  imports:     [CommonModule, FormsModule, LeafletModule],
   templateUrl: './map.component.html',
   styleUrl:    './map.component.scss',
 })
@@ -112,25 +112,28 @@ export class MapComponent implements OnInit, OnDestroy {
   private eventLog = inject(EventLogService);
 
   // Map internals
-  private map!: L.Map;
-  private tileLayer!: L.TileLayer;
-  private summitLayer = L.layerGroup();
-  private walkerLayer = L.layerGroup();
-  private labelLayer  = L.layerGroup();   // zoom-dependent summit name labels
-  private walkers = new Map<string, WalkerState>();
-  private summitData: SummitLabelData[] = [];
+  private map!:           L.Map;
+  private tileLayer!:     L.TileLayer;
+  private glowLayer     = L.layerGroup();   // alert glow rings (behind summits)
+  private summitLayer   = L.layerGroup();
+  private activatorLayer = L.layerGroup();
+  private labelLayer    = L.layerGroup();   // zoom-dependent summit labels
+
+  private activators     = new Map<string, ActivatorState>();
+  private summitData:    SummitLabelData[] = [];
+  private alertedSummits = new Set<string>();
 
   // Subscriptions
   private refreshSub?: Subscription;
-  private wsSub?: Subscription;
+  private wsSub?:      Subscription;
 
   // Signals
   readonly loading            = signal(true);
   readonly summitCount        = signal(0);
-  readonly walkerCount        = signal(0);
+  readonly activatorCount     = signal(0);
   readonly traceDurationHours = signal(2);
 
-  readonly LABEL_ZOOM = 12;   // zoom level at which summit labels appear
+  readonly LABEL_ZOOM = 12;
 
   mapOptions: L.MapOptions = {
     center:             [47.5, 11.0],
@@ -146,23 +149,24 @@ export class MapComponent implements OnInit, OnDestroy {
 
   onMapReady(map: L.Map): void {
     this.map = map;
+    // Layer order: glow behind summits, activators on top, labels always topmost
+    this.glowLayer.addTo(map);
     this.summitLayer.addTo(map);
-    this.walkerLayer.addTo(map);
+    this.activatorLayer.addTo(map);
     this.labelLayer.addTo(map);
     this.applyTiles();
     this.loadSummits();
-    this.loadWalkers();
-    this.refreshSub = interval(60_000).subscribe(() => this.loadWalkers());
+    this.loadActivators();
+    this.refreshSub = interval(60_000).subscribe(() => this.loadActivators());
     this.ws.connect();
     this.wsSub = this.ws.messages$.subscribe(msg =>
       this.eventLog.info('WebSocket', JSON.stringify(msg))
     );
-    // Update labels whenever zoom or pan changes
     map.on('zoomend moveend', () => this.updateSummitLabels());
     this.eventLog.info('Map', 'Map ready');
   }
 
-  // ─── Tiles: CARTO Voyager (light) ──────────────────────────────────────────
+  // ─── Tiles ───────────────────────────────────────────────────────────────
 
   private applyTiles(): void {
     if (this.tileLayer) this.tileLayer.remove();
@@ -170,46 +174,65 @@ export class MapComponent implements OnInit, OnDestroy {
       'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
       {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 19,
+        subdomains:  'abcd',
+        maxZoom:     19,
       }
     );
     this.tileLayer.addTo(this.map);
   }
 
-  // ─── Summits ────────────────────────────────────────────────────────────────
+  // ─── Summits + alert glow ────────────────────────────────────────────────
 
   private loadSummits(): void {
-    this.api.getSummits().subscribe({
-      next: geojson => {
+    // Load summits and alerts in parallel; alerts failure is non-fatal
+    forkJoin({
+      geojson: this.api.getSummits(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      alerts:  this.api.getAlerts().pipe(catchError(() => of([] as any[]))),
+    }).subscribe({
+      next: ({ geojson, alerts }) => {
+        // Build the set of summit codes that have upcomingactivations (today → +7 days)
+        const now      = Date.now();
+        const sevenDays = 7 * 24 * 3_600_000;
+        this.alertedSummits.clear();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (alerts as any[]).forEach(a => {
+          const rawDate = a.dateActivated ?? a.date_activated ?? a.activationDate ?? '';
+          const ts = rawDate ? new Date(rawDate).getTime() : NaN;
+          if (!isNaN(ts) && ts >= now - 3_600_000 && ts <= now + sevenDays) {
+            const code = String(a.summit ?? a.summitCode ?? '');
+            if (code) this.alertedSummits.add(code);
+          }
+        });
+
         this.summitLayer.clearLayers();
+        this.glowLayer.clearLayers();
         this.summitData = [];
         let count = 0;
 
         geojson.features.forEach(f => {
-          const props = f.properties as Record<string, unknown>;
+          const props  = f.properties as Record<string, unknown>;
           const coords = (f.geometry as GeoJSON.Point).coordinates;
 
-          // Use correct API property names
-          const code       = String(props['summitCode']     ?? props['code']     ?? '');
-          const name       = String(props['peakName']       ?? props['name']     ?? '');
-          const elevationM = Number(props['elevationM']     ?? props['altitude'] ?? 0);
-          const assoc      = String(props['associationName']?? '');
-          const region     = String(props['region']         ?? '');
-          const points     = Number(props['points']         ?? 1);
+          const code       = String(props['summitCode']      ?? '');
+          const name       = String(props['peakName']        ?? '');
+          const elevationM = Number(props['elevationM']      ?? 0);
+          const assoc      = String(props['associationName'] ?? '');
+          const region     = String(props['region']          ?? '');
+          const points     = Number(props['points']          ?? 1);
           const color      = summitColor(points);
           const latlng: L.LatLngExpression = [coords[1], coords[0]];
 
+          // Uniform small circle — same size for all summits
           const m = L.circleMarker(latlng, {
-            radius:      5 + Math.min(points, 10) * 0.5,
+            radius:      5,
             fillColor:   color,
-            color:       'rgba(0,0,0,0.25)',
+            color:       'rgba(0,0,0,0.30)',
             weight:      1,
-            fillOpacity: 0.88,
+            fillOpacity: 0.9,
             opacity:     1,
           });
 
-          // Hover tooltip — shows all info
           m.bindTooltip(
             `<b>${code}</b><br>${name}<br>` +
             `${elevationM} m · ${points} pt<br>` +
@@ -217,7 +240,7 @@ export class MapComponent implements OnInit, OnDestroy {
             { direction: 'top', className: 'sota-tooltip' }
           );
 
-          // Click popup — full detail
+          const sotlasUrl = `https://sotl.as/summits/${code}`;
           m.bindPopup(`
             <div class="sota-popup">
               <div class="sota-popup__title">${code}</div>
@@ -226,17 +249,31 @@ export class MapComponent implements OnInit, OnDestroy {
               <div class="sota-popup__row"><span>Points</span><span>${points} pt</span></div>
               <div class="sota-popup__row"><span>Association</span><span>${assoc}</span></div>
               ${region ? `<div class="sota-popup__row"><span>Region</span><span>${region}</span></div>` : ''}
+              <a href="${sotlasUrl}" target="_blank" rel="noopener" class="sota-popup__btn">View on SOTLAS ↗</a>
             </div>`, { className: 'sota-popup-wrap' });
 
           this.summitLayer.addLayer(m);
           this.summitData.push({ marker: m, latlng, code, name, elevationM, points });
           count++;
+
+          // Glow ring behind summit marker when an activation is planned
+          if (this.alertedSummits.has(code)) {
+            L.circleMarker(latlng, {
+              radius:      10,
+              fillColor:   color,
+              color:       color,
+              weight:      3,
+              fillOpacity: 0,
+              opacity:     0.8,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              className:   'summit-glow' as any,
+            }).addTo(this.glowLayer);
+          }
         });
 
         this.summitCount.set(count);
         this.loading.set(false);
         this.eventLog.success('Summits', `Loaded ${count} summits`);
-        // Draw labels if already at high zoom
         this.updateSummitLabels();
       },
       error: err => {
@@ -246,7 +283,7 @@ export class MapComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ─── Summit labels at high zoom ─────────────────────────────────────────────
+  // ─── Summit labels at high zoom ──────────────────────────────────────────
 
   private updateSummitLabels(): void {
     this.labelLayer.clearLayers();
@@ -259,9 +296,10 @@ export class MapComponent implements OnInit, OnDestroy {
         const label = L.marker(d.latlng, {
           icon: L.divIcon({
             className: 'summit-label',
-            html: `<span class="summit-label__code">${d.code}</span><br><span class="summit-label__name">${d.name}</span>`,
-            iconSize:   [0, 0],
-            iconAnchor: [0, -10],
+            // Single block, no <br>, centered text below the marker
+            html:       `<div class="summit-label__inner"><span class="summit-label__code">${d.code}</span><span class="summit-label__name">${d.name}</span></div>`,
+            iconSize:   [120, 30],
+            iconAnchor: [60, -10],  // horizontally centered, positioned below marker
           }),
           interactive: false,
           zIndexOffset: -200,
@@ -270,62 +308,56 @@ export class MapComponent implements OnInit, OnDestroy {
       });
   }
 
-  // ─── Walkers ────────────────────────────────────────────────────────────────
+  // ─── Activators ─────────────────────────────────────────────────────────
 
-  private loadWalkers(): void {
+  private loadActivators(): void {
     this.api.getAprsPositions().subscribe({
       next: positions => {
         const cutoffMs = this.traceDurationHours() * 3_600_000;
         const now      = Date.now();
 
-        // Group by callsign
-        const byCs = new Map<string, AprsPosition[]>();
-        positions.forEach(p => {
-          const arr = byCs.get(p.callsign) ?? [];
-          arr.push(p);
-          byCs.set(p.callsign, arr);
-        });
-
-        // Sort newest-first, filter by trace window
-        byCs.forEach((list, cs) => {
-          list.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
-          const filtered = list.filter(p => now - new Date(p.lastSeen).getTime() <= cutoffMs);
-          byCs.set(cs, filtered.length > 0 ? filtered : [list[0]]);
-        });
-
-        // Remove stale walkers
-        this.walkers.forEach((st, cs) => {
-          if (!byCs.has(cs)) {
-            this.walkerLayer.removeLayer(st.marker);
-            this.walkerLayer.removeLayer(st.trace);
-            this.walkers.delete(cs);
+        // Remove activators no longer in the API response
+        const liveCallsigns = new Set(positions.map(p => p.callsign));
+        this.activators.forEach((st, cs) => {
+          if (!liveCallsigns.has(cs)) {
+            this.activatorLayer.removeLayer(st.marker);
+            this.activatorLayer.removeLayer(st.trace);
+            this.activators.delete(cs);
           }
         });
 
-        // Update / create walkers
-        byCs.forEach((posList, cs) => {
-          const latest    = posList[0];
-          const freshness = walkerFreshness(latest.lastSeen);
+        positions.forEach(pos => {
+          const cs        = pos.callsign;
+          const freshness = activatorFreshness(pos.lastSeen);
           const latlng: L.LatLngExpression = [
-            parseFloat(latest.latitude),
-            parseFloat(latest.longitude),
+            parseFloat(pos.latitude),
+            parseFloat(pos.longitude),
           ];
-          const tracePoints: L.LatLngExpression[] = posList.map(p =>
-            [parseFloat(p.latitude), parseFloat(p.longitude)]
-          );
-          const popup = this.buildWalkerPopup(cs, latest, freshness, posList.length);
 
-          if (this.walkers.has(cs)) {
-            const st = this.walkers.get(cs)!;
+          // Build trace from embedded position history stored in DynamoDB
+          type TrackPoint = { latitude: string; longitude: string; altitude: string; timestamp: string };
+          const history = (pos.positions ?? []) as TrackPoint[];
+          const tracePoints: L.LatLngExpression[] = history
+            .filter(p => now - new Date(p.timestamp).getTime() <= cutoffMs)
+            .map(p => [parseFloat(p.latitude), parseFloat(p.longitude)] as L.LatLngExpression);
+          // Always add current position if not already in trace
+          if (tracePoints.length === 0) {
+            tracePoints.push(latlng);
+          }
+
+          const popup = this.buildActivatorPopup(cs, pos, freshness, history.length);
+
+          if (this.activators.has(cs)) {
+            const st = this.activators.get(cs)!;
             st.marker.setLatLng(latlng);
-            st.marker.setIcon(makeWalkerIcon(cs, freshness));
+            st.marker.setIcon(makeActivatorIcon(cs, freshness));
             st.marker.setPopupContent(popup);
             st.trace.setLatLngs(tracePoints);
             st.trace.setStyle({ color: freshness.color });
-            st.positions = posList;
+            st.positions = [pos];
           } else {
             const marker = L.marker(latlng, {
-              icon:         makeWalkerIcon(cs, freshness),
+              icon:         makeActivatorIcon(cs, freshness),
               zIndexOffset: 1000,
             });
             marker.bindPopup(popup, { className: 'sota-popup-wrap' });
@@ -336,53 +368,56 @@ export class MapComponent implements OnInit, OnDestroy {
 
             const trace = L.polyline(tracePoints, {
               color:     freshness.color,
-              weight:    2,
-              opacity:   0.55,
-              dashArray: '5 5',
+              weight:    3,
+              opacity:   0.7,
+              dashArray: '6 4',
             });
 
-            this.walkerLayer.addLayer(trace);
-            this.walkerLayer.addLayer(marker);
-            this.walkers.set(cs, { callsign: cs, positions: posList, marker, trace });
+            this.activatorLayer.addLayer(trace);
+            this.activatorLayer.addLayer(marker);
+            this.activators.set(cs, { callsign: cs, positions: [pos], marker, trace });
           }
 
           this.eventLog.info('APRS',
-            `${cs} @ ${parseFloat(latest.latitude).toFixed(4)},${parseFloat(latest.longitude).toFixed(4)} (${freshness.label})`
+            `${cs} @ ${parseFloat(pos.latitude).toFixed(4)},${parseFloat(pos.longitude).toFixed(4)} (${freshness.label})`
           );
         });
 
-        this.walkerCount.set(this.walkers.size);
-        this.eventLog.success('APRS', `Refreshed — ${this.walkers.size} walkers active`);
+        this.activatorCount.set(this.activators.size);
+        this.eventLog.success('APRS', `Refreshed — ${this.activators.size} activators active`);
       },
       error: err => this.eventLog.error('APRS', `Failed: ${err.message}`),
     });
   }
 
-  private buildWalkerPopup(
-    cs: string,
-    pos: AprsPosition,
-    freshness: Freshness,
-    count: number,
+  private buildActivatorPopup(
+    cs:           string,
+    pos:          AprsPosition,
+    freshness:    Freshness,
+    historyCount: number,
   ): string {
-    const lat = parseFloat(pos.latitude).toFixed(5);
-    const lon = parseFloat(pos.longitude).toFixed(5);
-    const alt = pos.altitude ? `${parseFloat(pos.altitude).toFixed(0)} m` : 'N/A';
-    const t   = new Date(pos.lastSeen).toLocaleString();
+    const lat      = parseFloat(pos.latitude).toFixed(5);
+    const lon      = parseFloat(pos.longitude).toFixed(5);
+    const alt      = pos.altitude ? `${parseFloat(pos.altitude).toFixed(0)} m` : 'N/A';
+    const t        = new Date(pos.lastSeen).toLocaleString();
+    const basecs   = cs.replace(/-\d+$/, '');   // strip SSID for SOTLAS URL
+    const sotlasUrl = `https://sotl.as/activators/${basecs}`;
     return `
       <div class="sota-popup">
-        <div class="sota-popup__title">🚶 ${cs}</div>
+        <div class="sota-popup__title">📻 ${cs}</div>
         <div class="sota-popup__row"><span>Last seen</span><span>${freshness.label}</span></div>
         <div class="sota-popup__row"><span>Time</span><span>${t}</span></div>
         <div class="sota-popup__row"><span>Latitude</span><span>${lat}°</span></div>
         <div class="sota-popup__row"><span>Longitude</span><span>${lon}°</span></div>
         <div class="sota-popup__row"><span>Altitude</span><span>${alt}</span></div>
-        <div class="sota-popup__row"><span>Track points</span><span>${count}</span></div>
+        <div class="sota-popup__row"><span>Track points</span><span>${historyCount}</span></div>
+        <a href="${sotlasUrl}" target="_blank" rel="noopener" class="sota-popup__btn">View on SOTLAS ↗</a>
       </div>`;
   }
 
   onTraceDurationChange(): void {
     localStorage.setItem('traceDurationHours', String(this.traceDurationHours()));
-    this.loadWalkers();
+    this.loadActivators();
     this.eventLog.info('Config', `Trace window → ${this.traceDurationHours()} h`);
   }
 
