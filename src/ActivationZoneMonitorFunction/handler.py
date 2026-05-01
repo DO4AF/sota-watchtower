@@ -2,7 +2,7 @@ import json
 import boto3
 import requests
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import re
 from geopy.distance import geodesic
 import time
@@ -37,7 +37,7 @@ def store_aprs_position(callsign, latitude, longitude, altitude):
         'latitude': str(latitude),
         'longitude': str(longitude),
         'altitude': str(altitude),
-        'lastSeen': datetime.utcnow().isoformat(),
+        'lastSeen': datetime.now(timezone.utc).isoformat(),
         'ttl': ttl,
     })
 
