@@ -8,6 +8,7 @@ applications:
             - npm ci
         build:
           commands:
+            - envsubst < src/environments/environment.prod.ts > src/environments/environment.prod.tmp.ts && mv src/environments/environment.prod.tmp.ts src/environments/environment.prod.ts
             - npx ng build --configuration production
       artifacts:
         baseDirectory: dist/sota-watchtower-web/browser
