@@ -29,9 +29,8 @@ const SUMMIT_COLORS: Record<number, string> = {
   10: '#880e4f',
 };
 
-function summitColor(points: number): string {
-  const c = SUMMIT_COLORS[Math.max(1, Math.min(10, points))];
-  return c ?? '#aaa';
+function summitColor(pts: number): string {
+  return SUMMIT_COLORS[Math.max(1, Math.min(10, pts))] ?? '#aaa';
 }
 
 // ─── Walker freshness ────────────────────────────────────────────────────────
@@ -47,15 +46,16 @@ interface Freshness {
 function walkerFreshness(lastSeen: string): Freshness {
   const ageMs = Date.now() - new Date(lastSeen).getTime();
   const ageMin = ageMs / 60_000;
-  if (ageMin < 5)  return { ageMin, color: '#00e676', opacity: 1.0,  label: `${Math.round(ageMin)}m ago`,  pulse: true };
-  if (ageMin < 15) return { ageMin, color: '#ffeb3b', opacity: 0.85, label: `${Math.round(ageMin)}m ago`,  pulse: false };
-  if (ageMin < 30) return { ageMin, color: '#ff9800', opacity: 0.65, label: `${Math.round(ageMin)}m ago`,  pulse: false };
+  if (ageMin < 5)  return { ageMin, color: '#00e676', opacity: 1.0,  label: `${Math.round(ageMin)}m ago`, pulse: true };
+  if (ageMin < 15) return { ageMin, color: '#ffeb3b', opacity: 0.85, label: `${Math.round(ageMin)}m ago`, pulse: false };
+  if (ageMin < 30) return { ageMin, color: '#ff9800', opacity: 0.65, label: `${Math.round(ageMin)}m ago`, pulse: false };
   const h = Math.floor(ageMin / 60);
   const m = Math.round(ageMin % 60);
   return { ageMin, color: '#9e9e9e', opacity: 0.40, label: h > 0 ? `${h}h ${m}m ago` : `${Math.round(ageMin)}m ago`, pulse: false };
 }
 
-// ─── Walker dot icon (no emoji — clean colored dot + callsign label) ──────────
+// ─── Walker hiker icon ────────────────────────────────────────────────────────
+// Distinct from summit circle markers: uses 🚶 emoji in a color-coded badge.
 
 function makeWalkerIcon(callsign: string, freshness: Freshness): L.DivIcon {
   const pulse = freshness.pulse
@@ -65,14 +65,27 @@ function makeWalkerIcon(callsign: string, freshness: Freshness): L.DivIcon {
     className: '',
     html: `
       <div class="walker-marker" style="opacity:${freshness.opacity}">
-        ${pulse}
-        <div class="walker-marker__dot" style="background:${freshness.color}"></div>
+        <div class="walker-marker__badge" style="border-color:${freshness.color};background:${freshness.color}22">
+          ${pulse}
+          <span class="walker-marker__emoji">🚶</span>
+        </div>
         <span class="walker-marker__label">${callsign}</span>
       </div>`,
-    iconSize:    [36, 36],
-    iconAnchor:  [18, 18],
-    popupAnchor: [0, -20],
+    iconSize:    [40, 48],
+    iconAnchor:  [20, 20],
+    popupAnchor: [0, -24],
   });
+}
+
+// ─── Summit label data ────────────────────────────────────────────────────────
+
+interface SummitLabelData {
+  marker: L.CircleMarker;
+  latlng: L.LatLngExpression;
+  code: string;
+  name: string;
+  elevationM: number;
+  points: number;
 }
 
 // ─── Walker state ─────────────────────────────────────────────────────────────
@@ -81,7 +94,7 @@ interface WalkerState {
   callsign: string;
   positions: AprsPosition[];
   marker: L.Marker;
-  trace:  L.Polyline;
+  trace: L.Polyline;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -94,31 +107,35 @@ interface WalkerState {
   styleUrl:    './map.component.scss',
 })
 export class MapComponent implements OnInit, OnDestroy {
-  private api        = inject(ApiService);
-  private ws         = inject(WebSocketService);
-  private eventLog   = inject(EventLogService);
+  private api      = inject(ApiService);
+  private ws       = inject(WebSocketService);
+  private eventLog = inject(EventLogService);
 
   // Map internals
   private map!: L.Map;
   private tileLayer!: L.TileLayer;
   private summitLayer = L.layerGroup();
   private walkerLayer = L.layerGroup();
+  private labelLayer  = L.layerGroup();   // zoom-dependent summit name labels
   private walkers = new Map<string, WalkerState>();
+  private summitData: SummitLabelData[] = [];
 
   // Subscriptions
   private refreshSub?: Subscription;
   private wsSub?: Subscription;
 
   // Signals
-  readonly loading      = signal(true);
-  readonly summitCount  = signal(0);
-  readonly walkerCount  = signal(0);
+  readonly loading            = signal(true);
+  readonly summitCount        = signal(0);
+  readonly walkerCount        = signal(0);
   readonly traceDurationHours = signal(2);
 
+  readonly LABEL_ZOOM = 12;   // zoom level at which summit labels appear
+
   mapOptions: L.MapOptions = {
-    center:           [47.5, 11.0],
-    zoom:             7,
-    zoomControl:      true,
+    center:             [47.5, 11.0],
+    zoom:               7,
+    zoomControl:        true,
     attributionControl: true,
   };
 
@@ -131,6 +148,7 @@ export class MapComponent implements OnInit, OnDestroy {
     this.map = map;
     this.summitLayer.addTo(map);
     this.walkerLayer.addTo(map);
+    this.labelLayer.addTo(map);
     this.applyTiles();
     this.loadSummits();
     this.loadWalkers();
@@ -139,13 +157,17 @@ export class MapComponent implements OnInit, OnDestroy {
     this.wsSub = this.ws.messages$.subscribe(msg =>
       this.eventLog.info('WebSocket', JSON.stringify(msg))
     );
+    // Update labels whenever zoom or pan changes
+    map.on('zoomend moveend', () => this.updateSummitLabels());
     this.eventLog.info('Map', 'Map ready');
   }
+
+  // ─── Tiles: CARTO Voyager (light) ──────────────────────────────────────────
 
   private applyTiles(): void {
     if (this.tileLayer) this.tileLayer.remove();
     this.tileLayer = L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
       {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
         subdomains: 'abcd',
@@ -155,47 +177,67 @@ export class MapComponent implements OnInit, OnDestroy {
     this.tileLayer.addTo(this.map);
   }
 
+  // ─── Summits ────────────────────────────────────────────────────────────────
+
   private loadSummits(): void {
     this.api.getSummits().subscribe({
       next: geojson => {
         this.summitLayer.clearLayers();
+        this.summitData = [];
         let count = 0;
-        geojson.features.forEach(f => {
-          const props  = f.properties as Record<string, unknown>;
-          const coords = (f.geometry as GeoJSON.Point).coordinates;
-          const points = Number(props['points'] ?? 1);
-          const color  = summitColor(points);
-          const name   = String(props['name']     ?? '');
-          const code   = String(props['code']     ?? '');
-          const alt    = String(props['altitude'] ?? '');
 
-          const m = L.circleMarker([coords[1], coords[0]], {
-            radius:      5 + Math.min(points, 10) * 0.45,
+        geojson.features.forEach(f => {
+          const props = f.properties as Record<string, unknown>;
+          const coords = (f.geometry as GeoJSON.Point).coordinates;
+
+          // Use correct API property names
+          const code       = String(props['summitCode']     ?? props['code']     ?? '');
+          const name       = String(props['peakName']       ?? props['name']     ?? '');
+          const elevationM = Number(props['elevationM']     ?? props['altitude'] ?? 0);
+          const assoc      = String(props['associationName']?? '');
+          const region     = String(props['region']         ?? '');
+          const points     = Number(props['points']         ?? 1);
+          const color      = summitColor(points);
+          const latlng: L.LatLngExpression = [coords[1], coords[0]];
+
+          const m = L.circleMarker(latlng, {
+            radius:      5 + Math.min(points, 10) * 0.5,
             fillColor:   color,
-            color:       'rgba(255,255,255,0.25)',
+            color:       'rgba(0,0,0,0.25)',
             weight:      1,
-            fillOpacity: 0.9,
+            fillOpacity: 0.88,
             opacity:     1,
           });
 
+          // Hover tooltip — shows all info
           m.bindTooltip(
-            `<b>${code}</b><br>${name}<br>${alt} m · ${points} pt`,
+            `<b>${code}</b><br>${name}<br>` +
+            `${elevationM} m · ${points} pt<br>` +
+            `<small style="color:#999">${assoc}${region ? ' / ' + region : ''}</small>`,
             { direction: 'top', className: 'sota-tooltip' }
           );
+
+          // Click popup — full detail
           m.bindPopup(`
             <div class="sota-popup">
               <div class="sota-popup__title">${code}</div>
               <div class="sota-popup__subtitle">${name}</div>
-              <div class="sota-popup__row"><span>Altitude</span><span>${alt} m</span></div>
+              <div class="sota-popup__row"><span>Elevation</span><span>${elevationM} m</span></div>
               <div class="sota-popup__row"><span>Points</span><span>${points} pt</span></div>
+              <div class="sota-popup__row"><span>Association</span><span>${assoc}</span></div>
+              ${region ? `<div class="sota-popup__row"><span>Region</span><span>${region}</span></div>` : ''}
             </div>`, { className: 'sota-popup-wrap' });
 
           this.summitLayer.addLayer(m);
+          this.summitData.push({ marker: m, latlng, code, name, elevationM, points });
           count++;
         });
+
         this.summitCount.set(count);
         this.loading.set(false);
         this.eventLog.success('Summits', `Loaded ${count} summits`);
+        // Draw labels if already at high zoom
+        this.updateSummitLabels();
       },
       error: err => {
         this.eventLog.error('Summits', `Failed: ${err.message}`);
@@ -203,6 +245,32 @@ export class MapComponent implements OnInit, OnDestroy {
       },
     });
   }
+
+  // ─── Summit labels at high zoom ─────────────────────────────────────────────
+
+  private updateSummitLabels(): void {
+    this.labelLayer.clearLayers();
+    if (!this.map || this.map.getZoom() < this.LABEL_ZOOM) return;
+
+    const bounds = this.map.getBounds().pad(0.05);
+    this.summitData
+      .filter(d => bounds.contains(d.marker.getLatLng()))
+      .forEach(d => {
+        const label = L.marker(d.latlng, {
+          icon: L.divIcon({
+            className: 'summit-label',
+            html: `<span class="summit-label__code">${d.code}</span><br><span class="summit-label__name">${d.name}</span>`,
+            iconSize:   [0, 0],
+            iconAnchor: [0, -10],
+          }),
+          interactive: false,
+          zIndexOffset: -200,
+        });
+        this.labelLayer.addLayer(label);
+      });
+  }
+
+  // ─── Walkers ────────────────────────────────────────────────────────────────
 
   private loadWalkers(): void {
     this.api.getAprsPositions().subscribe({
@@ -245,7 +313,7 @@ export class MapComponent implements OnInit, OnDestroy {
           const tracePoints: L.LatLngExpression[] = posList.map(p =>
             [parseFloat(p.latitude), parseFloat(p.longitude)]
           );
-          const popup = this.buildPopup(cs, latest, freshness, posList.length);
+          const popup = this.buildWalkerPopup(cs, latest, freshness, posList.length);
 
           if (this.walkers.has(cs)) {
             const st = this.walkers.get(cs)!;
@@ -257,8 +325,8 @@ export class MapComponent implements OnInit, OnDestroy {
             st.positions = posList;
           } else {
             const marker = L.marker(latlng, {
-              icon:           makeWalkerIcon(cs, freshness),
-              zIndexOffset:   1000,
+              icon:         makeWalkerIcon(cs, freshness),
+              zIndexOffset: 1000,
             });
             marker.bindPopup(popup, { className: 'sota-popup-wrap' });
             marker.bindTooltip(
@@ -290,7 +358,7 @@ export class MapComponent implements OnInit, OnDestroy {
     });
   }
 
-  private buildPopup(
+  private buildWalkerPopup(
     cs: string,
     pos: AprsPosition,
     freshness: Freshness,
@@ -302,7 +370,7 @@ export class MapComponent implements OnInit, OnDestroy {
     const t   = new Date(pos.lastSeen).toLocaleString();
     return `
       <div class="sota-popup">
-        <div class="sota-popup__title">${cs}</div>
+        <div class="sota-popup__title">🚶 ${cs}</div>
         <div class="sota-popup__row"><span>Last seen</span><span>${freshness.label}</span></div>
         <div class="sota-popup__row"><span>Time</span><span>${t}</span></div>
         <div class="sota-popup__row"><span>Latitude</span><span>${lat}°</span></div>
