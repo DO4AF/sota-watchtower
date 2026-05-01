@@ -1,4 +1,11 @@
 version = 0.1
+
+# Amplify App ID — set once after connecting the app in the Amplify console.
+# Used by deploy.sh to keep Amplify env vars in sync after every sam deploy.
+[amplify]
+app_id = "d1e96ec1sckzck"
+branch = "main"
+
 [default.deploy.parameters]
 stack_name = "sota-watchtower-stack"
 tags = "project=\"sota-watchtower\""
@@ -8,8 +15,10 @@ region = "eu-central-1"
 capabilities = "CAPABILITY_IAM"
 image_repositories = []
 parameter_overrides =[
-	"TelegramBotToken=<YOUR_TOKEN>",
-	"TelegramUserChatId=<YOUR_CHAT_ID>",
-	"TelegramGroupChatId=<YOUR_CHAT_ID>",
-	"FrequencyFilterPattern=\\b(145|433|2|70).*-.*\\b"
+	"TelegramBotToken=REDACTED_TELEGRAM_TOKEN",
+	"TelegramUserChatId=5861279366",
+	"TelegramGroupChatId=-1002179601871",
+	"FrequencyFilterPattern=\\b(145|433|2|70).*-.*\\b",
+	"AdminEmail=REDACTED_EMAIL",
+	"AdminPassword=REDACTED_PASSWORD"
 	]
