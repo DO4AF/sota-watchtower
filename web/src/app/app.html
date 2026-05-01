@@ -1,44 +1,40 @@
-<p-toolbar class="sota-navbar">
-  <ng-template #start>
-    <a routerLink="/map" class="sota-brand">
-      <span class="sota-brand__icon">📡</span>
-      <span class="sota-brand__name">SOTA Watchtower</span>
-    </a>
-  </ng-template>
+<div class="app-layout" [class.sidebar-collapsed]="sidebarCollapsed">
+  <!-- Left Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar__brand" (click)="toggleSidebar()">
+      <span class="sidebar__brand-icon">📡</span>
+      <span class="sidebar__brand-name">SOTA Watchtower</span>
+    </div>
 
-  <ng-template #center>
-    <nav class="sota-nav">
-      <a routerLink="/map" routerLinkActive="active">
-        <i class="pi pi-map"></i>
-        Map
+    <nav class="sidebar__nav">
+      <a routerLink="/map" routerLinkActive="active" class="sidebar__nav-item" title="Map">
+        <span class="sidebar__nav-icon">🗺️</span>
+        <span class="sidebar__nav-label">Map</span>
       </a>
-      <a routerLink="/alerts" routerLinkActive="active">
-        <i class="pi pi-bell"></i>
-        Alerts
+      <a routerLink="/alerts" routerLinkActive="active" class="sidebar__nav-item" title="Alerts">
+        <span class="sidebar__nav-icon">🔔</span>
+        <span class="sidebar__nav-label">Alerts</span>
       </a>
-      <a routerLink="/config" routerLinkActive="active">
-        <i class="pi pi-cog"></i>
-        Config
+      <a routerLink="/config" routerLinkActive="active" class="sidebar__nav-item" title="Config">
+        <span class="sidebar__nav-icon">⚙️</span>
+        <span class="sidebar__nav-label">Config</span>
       </a>
     </nav>
-  </ng-template>
 
-  <ng-template #end>
-    <div class="sota-toolbar-end">
-      <p-button
-        [icon]="themeService.isDark() ? 'pi pi-sun' : 'pi pi-moon'"
-        [rounded]="true"
-        [text]="true"
-        severity="secondary"
-        size="small"
-        (onClick)="themeService.toggle()"
-        [pTooltip]="themeService.isDark() ? 'Switch to light mode' : 'Switch to dark mode'"
-        tooltipPosition="bottom"
-      />
+    <div class="sidebar__footer">
+      <button class="sidebar__footer-btn" (click)="toggleTheme()" [title]="themeService.isDark() ? 'Switch to light mode' : 'Switch to dark mode'">
+        <span class="sidebar__nav-icon">{{ themeService.isDark() ? '☀️' : '🌙' }}</span>
+        <span class="sidebar__nav-label">{{ themeService.isDark() ? 'Light mode' : 'Dark mode' }}</span>
+      </button>
+      <button class="sidebar__footer-btn" (click)="logout()" title="Sign out">
+        <span class="sidebar__nav-icon">🚪</span>
+        <span class="sidebar__nav-label">Sign out</span>
+      </button>
     </div>
-  </ng-template>
-</p-toolbar>
+  </aside>
 
-<main class="sota-main">
-  <router-outlet />
-</main>
+  <!-- Main Content -->
+  <main class="main-content">
+    <router-outlet />
+  </main>
+</div>

@@ -1,0 +1,49 @@
+# Cline Rules — SOTA Watchtower
+
+## Memory Bank
+This project uses a memory bank in `cline_docs/`. Always read the relevant files before making changes:
+- `cline_docs/projectOverview.md` — Project summary, URLs, tech stack
+- `cline_docs/architecture.md` — AWS architecture, DynamoDB schemas, API endpoints
+- `cline_docs/frontendArchitecture.md` — Angular structure, components, services
+- `cline_docs/backendArchitecture.md` — Lambda functions, EC2, summit data
+- `cline_docs/deploymentGuide.md` — Deployment procedures
+- `cline_docs/currentState.md` — Current status and recent changes
+- `cline_docs/styleGuide.md` — UI conventions and design system
+
+## Before Starting Any Task
+1. Read `cline_docs/currentState.md` to understand what's already done
+2. Read the relevant architecture doc for the area you're changing
+3. Read `cline_docs/styleGuide.md` for UI changes
+
+## After Completing Any Task
+1. Update `cline_docs/currentState.md` with what was changed
+2. Update relevant architecture docs if structure changed
+
+## Critical Constraints
+
+### Frontend (Angular 19)
+- Standalone components only — no NgModules
+- `inject()` for DI, not constructor injection
+- **ALWAYS run `cd web && npx ng build --configuration production` before git push**
+- Dark mode is default — ThemeService defaults to 'dark'
+- Left sidebar navigation — no top navbar
+- No summit marker clustering — individual `L.circleMarker` at all zoom levels
+- Summit colors: points 1-10, green (#00c853) to red (#880e4f)
+- Walker freshness: < 5min=green, 5-15min=yellow, 15-30min=orange, 30+min=gray
+
+### Backend (Python 3.12 Lambda)
+- DynamoDB table names from env vars ending in `_TABLE_NAME` (not `_TABLE_ARN`)
+- Always include CORS headers in responses
+- AprsPositionsTable: PK=callsign, SK=timestamp (ISO8601), TTL=2h
+
+### Deployment
+- Full deploy: `./deploy.sh`
+- Frontend only: `git push origin main` (Amplify auto-builds)
+- `.env` FREQUENCY_FILTER_PATTERN must be single-quoted
+- Stack: `sota-watchtower-stack` in `eu-central-1`
+- Amplify App ID: `d1e96ec1sckzck`
+
+## Live URLs
+- Web: https://main.d1e96ec1sckzck.amplifyapp.com
+- API: https://eklnc5wyab.execute-api.eu-central-1.amazonaws.com/Prod
+- WS: wss://2p8sa2gf6a.execute-api.eu-central-1.amazonaws.com/Prod
