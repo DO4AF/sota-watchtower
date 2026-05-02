@@ -7,6 +7,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { LeafletModule } from '@bluehalo/ngx-leaflet';
 import * as L from 'leaflet';
 import { forkJoin, interval, Subscription } from 'rxjs';
@@ -135,6 +136,7 @@ export class MapComponent implements OnInit, OnDestroy {
   private api      = inject(ApiService);
   private ws       = inject(WebSocketService);
   private eventLog = inject(EventLogService);
+  private route    = inject(ActivatedRoute);
 
   // Canvas renderer — all CircleMarkers share a single <canvas> element
   private canvasRenderer = L.canvas({ padding: VIEWPORT_PAD });
@@ -185,13 +187,52 @@ export class MapComponent implements OnInit, OnDestroy {
     preferCanvas:       true,   // use canvas for all vector layers
   };
 
+  /** Query params set when navigating from the Alerts page */
+  private pendingCenter?: { lat: number; lon: number; zoom: number; label?: string };
+
   ngOnInit(): void {
     const saved = localStorage.getItem('traceDurationHours');
     if (saved) this.traceDurationHours.set(Number(saved));
+
+    // Read optional query params lat/lon/zoom/label set by AlertsComponent.jumpTo*
+    this.route.queryParamMap.subscribe(params => {
+      const lat  = parseFloat(params.get('lat') ?? '');
+      const lon  = parseFloat(params.get('lon') ?? '');
+      const zoom = parseInt(params.get('zoom') ?? '14', 10);
+      const label = params.get('label') ?? undefined;
+      if (!isNaN(lat) && !isNaN(lon)) {
+        this.pendingCenter = { lat, lon, zoom, label };
+        // If the map is already ready, apply immediately
+        if (this.map) this.applyPendingCenter();
+      }
+    });
+  }
+
+  private applyPendingCenter(): void {
+    if (!this.pendingCenter) return;
+    const { lat, lon, zoom, label } = this.pendingCenter;
+    this.pendingCenter = undefined;
+    this.map.setView([lat, lon], zoom, { animate: true });
+    if (label) {
+      // Show a brief popup marker at the target location
+      const marker = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div class="jump-marker"><span>${label}</span></div>`,
+          iconSize: [80, 28],
+          iconAnchor: [40, 28],
+        }),
+        zIndexOffset: 2000,
+      }).addTo(this.map);
+      setTimeout(() => this.map.removeLayer(marker), 5000);
+    }
+    this.eventLog.info('Map', `Jumped to ${label ?? `${lat},${lon}`}`);
   }
 
   onMapReady(map: L.Map): void {
     this.map = map;
+    // Apply any pending center from query params (may arrive before map is ready)
+    if (this.pendingCenter) this.applyPendingCenter();
     // Layer order: glow behind summits, activators on top, labels always topmost
     this.glowLayer.addTo(map);
     this.summitLayer.addTo(map);

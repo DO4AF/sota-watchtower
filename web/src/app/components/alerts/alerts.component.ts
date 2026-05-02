@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { InputTextModule } from 'primeng/inputtext';
@@ -41,19 +42,18 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 export class AlertsComponent implements OnInit, OnDestroy {
   private apiService = inject(ApiService);
   private wsService  = inject(WebSocketService);
+  private router     = inject(Router);
 
   alerts        = signal<SotaAlert[]>([]);
   spots         = signal<SotaSpot[]>([]);
   alertsLoading = signal(true);
   spotsLoading  = signal(true);
 
-  /** Search/filter strings (plain strings — used in template getters via CD) */
-  alertFilter = '';
-  spotFilter  = '';
+  alertFilter          = '';
+  spotFilter           = '';
+  showOnlyWithPosition = false;
 
-  /** APRS positions map: callsign → position */
-  private aprsMap = new Map<string, AprsPosition>();
-  /** Summit coordinates map: summitCode → {lat, lon} */
+  private aprsMap       = new Map<string, AprsPosition>();
   private summitCoordMap = new Map<string, { lat: number; lon: number }>();
 
   private subs: Subscription[] = [];
@@ -134,9 +134,31 @@ export class AlertsComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ── Position helpers ────────────────────────────────────────────────────────
+
+  private lookupPosition(callsign: string): AprsPosition | undefined {
+    return this.aprsMap.get(callsign)
+      ?? this.aprsMap.get(callsign.replace(/-\d+$/, ''));
+  }
+
+  hasPosition(alert: SotaAlert): boolean {
+    return !!this.lookupPosition(alert.callsign);
+  }
+
+  getAlertPosition(alert: SotaAlert): AprsPosition | undefined {
+    return this.lookupPosition(alert.callsign);
+  }
+
+  getSpotActivatorPosition(callsign: string): AprsPosition | undefined {
+    return this.lookupPosition(callsign);
+  }
+
+  getSummitCoord(summitCode: string): { lat: number; lon: number } | undefined {
+    return this.summitCoordMap.get(summitCode);
+  }
+
   distanceToSummit(alert: SotaAlert): string {
-    const aprs = this.aprsMap.get(alert.callsign)
-      ?? this.aprsMap.get(alert.callsign.replace(/-\d+$/, ''));
+    const aprs = this.lookupPosition(alert.callsign);
     if (!aprs) return '—';
     const summit = this.summitCoordMap.get(alert.summit);
     if (!summit) return '?';
@@ -147,17 +169,64 @@ export class AlertsComponent implements OnInit, OnDestroy {
     return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
   }
 
-  hasPosition(alert: SotaAlert): boolean {
-    return this.aprsMap.has(alert.callsign)
-      || this.aprsMap.has(alert.callsign.replace(/-\d+$/, ''));
+  // ── Navigation helpers ──────────────────────────────────────────────────────
+
+  sotlasActivatorUrl(callsign: string): string {
+    return `https://sotl.as/activators/${callsign.replace(/-\d+$/, '')}`;
   }
+
+  sotlasSummitUrl(summitCode: string): string {
+    return `https://sotl.as/summits/${summitCode}`;
+  }
+
+  jumpToActivator(alert: SotaAlert): void {
+    const pos = this.getAlertPosition(alert);
+    if (!pos) return;
+    this.router.navigate(['/map'], {
+      queryParams: {
+        lat:  parseFloat(pos.latitude).toFixed(5),
+        lon:  parseFloat(pos.longitude).toFixed(5),
+        zoom: 14,
+        label: alert.callsign,
+      },
+    });
+  }
+
+  jumpToSpotActivator(callsign: string): void {
+    const pos = this.getSpotActivatorPosition(callsign);
+    if (!pos) return;
+    this.router.navigate(['/map'], {
+      queryParams: {
+        lat:  parseFloat(pos.latitude).toFixed(5),
+        lon:  parseFloat(pos.longitude).toFixed(5),
+        zoom: 14,
+        label: callsign,
+      },
+    });
+  }
+
+  jumpToSummit(summitCode: string): void {
+    const coord = this.getSummitCoord(summitCode);
+    if (!coord) return;
+    this.router.navigate(['/map'], {
+      queryParams: {
+        lat:  coord.lat.toFixed(5),
+        lon:  coord.lon.toFixed(5),
+        zoom: 14,
+        label: summitCode,
+      },
+    });
+  }
+
+  // ── Filtered data getters ───────────────────────────────────────────────────
 
   get filteredAlerts(): SotaAlert[] {
     const q = this.alertFilter.trim().toLowerCase();
-    if (!q) return this.alerts();
-    return this.alerts().filter(a =>
-      a.callsign.toLowerCase().includes(q) || a.summit.toLowerCase().includes(q)
-    );
+    return this.alerts().filter(a => {
+      if (this.showOnlyWithPosition && !this.lookupPosition(a.callsign)) return false;
+      if (!q) return true;
+      return a.callsign.toLowerCase().includes(q) || a.summit.toLowerCase().includes(q);
+    });
   }
 
   get filteredSpots(): SotaSpot[] {
@@ -165,8 +234,8 @@ export class AlertsComponent implements OnInit, OnDestroy {
     if (!q) return this.spots();
     return this.spots().filter(s =>
       s.activatorCallsign.toLowerCase().includes(q) ||
-      s.summitCode.toLowerCase().includes(q)       ||
-      s.frequency.toLowerCase().includes(q)        ||
+      s.summitCode.toLowerCase().includes(q)        ||
+      s.frequency.toLowerCase().includes(q)         ||
       s.mode.toLowerCase().includes(q)
     );
   }

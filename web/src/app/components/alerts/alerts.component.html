@@ -23,11 +23,20 @@
     <div class="table-panel">
       <div class="panel-toolbar">
         <span class="panel-title"><i class="pi pi-bell"></i> Alerts</span>
-        <p-iconfield>
-          <p-inputicon styleClass="pi pi-search" />
-          <input pInputText type="text" [(ngModel)]="alertFilter"
-                 placeholder="Search…" class="panel-search" />
-        </p-iconfield>
+        <div class="toolbar-controls">
+          <button
+            class="aprs-toggle"
+            [class.aprs-toggle--active]="showOnlyWithPosition"
+            (click)="showOnlyWithPosition = !showOnlyWithPosition"
+            title="Only show activators with APRS position data">
+            📡 With APRS
+          </button>
+          <p-iconfield>
+            <p-inputicon styleClass="pi pi-search" />
+            <input pInputText type="text" [(ngModel)]="alertFilter"
+                   placeholder="Search…" class="panel-search" />
+          </p-iconfield>
+        </div>
       </div>
 
       <p-table
@@ -35,23 +44,31 @@
         [loading]="alertsLoading()"
         [rowHover]="true"
         [stripedRows]="true"
-        [paginator]="true"
-        [rows]="12"
-        [rowsPerPageOptions]="[10, 15, 25, 50]"
-        styleClass="p-datatable-sm"
+        [scrollable]="true"
+        scrollHeight="flex"
+        styleClass="p-datatable-sm alerts-table"
       >
         <ng-template #header>
           <tr>
-            <th>Callsign</th>
-            <th>Summit</th>
-            <th>Distance</th>
-            <th>Status</th>
+            <th pSortableColumn="callsign">Callsign <p-sortIcon field="callsign" /></th>
+            <th pSortableColumn="summit">Summit <p-sortIcon field="summit" /></th>
+            <th>Dist. to Summit</th>
+            <th pSortableColumn="notified">Status <p-sortIcon field="notified" /></th>
+            <th>Actions</th>
           </tr>
         </ng-template>
         <ng-template #body let-alert>
           <tr>
-            <td><span class="mono-cell mono-cell--blue">{{ alert.callsign }}</span></td>
-            <td><span class="mono-cell">{{ alert.summit }}</span></td>
+            <td>
+              <a class="callsign-link" [href]="sotlasActivatorUrl(alert.callsign)" target="_blank" rel="noopener">
+                {{ alert.callsign }}
+              </a>
+            </td>
+            <td>
+              <a class="summit-link" [href]="sotlasSummitUrl(alert.summit)" target="_blank" rel="noopener">
+                {{ alert.summit }}
+              </a>
+            </td>
             <td>
               @if (hasPosition(alert)) {
                 <span class="dist-cell dist-cell--live">{{ distanceToSummit(alert) }}</span>
@@ -66,10 +83,22 @@
                 <p-tag value="Planned" severity="warn" icon="pi pi-clock" />
               }
             </td>
+            <td class="action-cell">
+              @if (getAlertPosition(alert)) {
+                <button class="map-btn" (click)="jumpToActivator(alert)" title="Show activator on map">
+                  🗺️ Activator
+                </button>
+              }
+              @if (getSummitCoord(alert.summit)) {
+                <button class="map-btn" (click)="jumpToSummit(alert.summit)" title="Show summit on map">
+                  🏔️ Summit
+                </button>
+              }
+            </td>
           </tr>
         </ng-template>
         <ng-template #emptymessage>
-          <tr><td colspan="4" class="empty-cell">No active alerts</td></tr>
+          <tr><td colspan="5" class="empty-cell">No active alerts</td></tr>
         </ng-template>
       </p-table>
     </div>
@@ -90,31 +119,51 @@
         [loading]="spotsLoading()"
         [rowHover]="true"
         [stripedRows]="true"
-        [paginator]="true"
-        [rows]="12"
-        [rowsPerPageOptions]="[10, 15, 25, 50]"
-        styleClass="p-datatable-sm"
+        [scrollable]="true"
+        scrollHeight="flex"
+        styleClass="p-datatable-sm spots-table"
       >
         <ng-template #header>
           <tr>
-            <th>Activator</th>
-            <th>Summit</th>
-            <th>Freq</th>
-            <th>Mode</th>
-            <th>Time</th>
+            <th pSortableColumn="activatorCallsign">Activator <p-sortIcon field="activatorCallsign" /></th>
+            <th pSortableColumn="summitCode">Summit <p-sortIcon field="summitCode" /></th>
+            <th pSortableColumn="frequency">Freq (MHz) <p-sortIcon field="frequency" /></th>
+            <th pSortableColumn="mode">Mode <p-sortIcon field="mode" /></th>
+            <th pSortableColumn="timeStamp">Time (UTC) <p-sortIcon field="timeStamp" /></th>
+            <th>Links</th>
           </tr>
         </ng-template>
         <ng-template #body let-spot>
           <tr>
-            <td><span class="mono-cell mono-cell--blue">{{ spot.activatorCallsign }}</span></td>
-            <td><span class="mono-cell">{{ spot.summitCode }}</span></td>
+            <td>
+              <a class="callsign-link" [href]="sotlasActivatorUrl(spot.activatorCallsign)" target="_blank" rel="noopener">
+                {{ spot.activatorCallsign }}
+              </a>
+            </td>
+            <td>
+              <a class="summit-link" [href]="sotlasSummitUrl(spot.summitCode)" target="_blank" rel="noopener">
+                {{ spot.summitCode }}
+              </a>
+            </td>
             <td><span class="mono-cell">{{ spot.frequency }}</span></td>
             <td><span class="mono-cell">{{ spot.mode }}</span></td>
             <td><span class="time-cell">{{ spot.timeStamp | date:'HH:mm':'UTC' }}</span></td>
+            <td class="action-cell">
+              @if (getSpotActivatorPosition(spot.activatorCallsign)) {
+                <button class="map-btn" (click)="jumpToSpotActivator(spot.activatorCallsign)" title="Show activator on map">
+                  🗺️ Activator
+                </button>
+              }
+              @if (getSummitCoord(spot.summitCode)) {
+                <button class="map-btn" (click)="jumpToSummit(spot.summitCode)" title="Show summit on map">
+                  🏔️ Summit
+                </button>
+              }
+            </td>
           </tr>
         </ng-template>
         <ng-template #emptymessage>
-          <tr><td colspan="5" class="empty-cell">No recent spots</td></tr>
+          <tr><td colspan="6" class="empty-cell">No recent spots</td></tr>
         </ng-template>
       </p-table>
     </div>

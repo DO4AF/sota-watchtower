@@ -1,4 +1,6 @@
 // ── Page shell ────────────────────────────────────────────────────────────────
+// The .main-content wrapper in app.scss is height:100vh + overflow:hidden.
+// We only need to fill it and prevent our own overflow.
 .alerts-page {
   height: 100%;
   display: flex;
@@ -13,19 +15,19 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 1rem;
+  margin-bottom: 0.85rem;
   flex-shrink: 0;
 
   &__title {
     margin: 0 0 0.2rem;
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: var(--p-text-color);
   }
 
   &__sub {
     margin: 0;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--p-text-muted-color);
   }
 
@@ -42,7 +44,7 @@
   align-items: center;
   padding: 2px 10px;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
 
   &--warn { background: #f9e2af22; border: 1px solid #f9e2af66; color: #f9e2af; }
@@ -50,50 +52,84 @@
 }
 
 // ── Side-by-side row ──────────────────────────────────────────────────────────
+// flex: 1 + min-height: 0 are the two critical rules for flex children that
+// should fill height without growing the parent.
 .tables-row {
+  flex: 1 1 0;    // grow + shrink, base 0 so it doesn't start from content size
+  min-height: 0;  // MUST be 0 for overflow to work in a flex child
   display: flex;
-  flex: 1;
-  min-height: 0;
   gap: 1rem;
-  padding-bottom: 0;
+  overflow: hidden; // clip the children so nothing leaks
 }
 
 // ── Individual panel ──────────────────────────────────────────────────────────
 .table-panel {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--p-surface-900);
   border: 1px solid var(--p-surface-700);
-  border-radius: 12px 12px 0 0;
-  overflow: hidden;
+  border-radius: 10px 10px 0 0;
+  overflow: hidden; // clip so scrollHeight="flex" can take effect inside
 }
 
-// ── Panel toolbar (title + search) ────────────────────────────────────────────
+// ── Panel toolbar (title + controls) ─────────────────────────────────────────
 .panel-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.65rem 1rem;
+  padding: 0.55rem 0.9rem;
   border-bottom: 1px solid var(--p-surface-700);
   flex-shrink: 0;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .panel-title {
-  font-size: 0.83rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--p-text-color);
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  white-space: nowrap;
 
-  i { font-size: 0.85rem; color: var(--p-primary-color); }
+  i { font-size: 0.82rem; color: var(--p-primary-color); }
 }
 
 .panel-search {
-  width: 180px;
-  font-size: 0.8rem;
+  width: 150px;
+  font-size: 0.78rem;
+}
+
+// APRS filter toggle
+.aprs-toggle {
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--p-surface-600);
+  background: transparent;
+  color: var(--p-text-muted-color);
+  font-size: 0.7rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+
+  &:hover { border-color: #89b4fa; color: #89b4fa; }
+
+  &--active {
+    border-color: #89b4fa;
+    background: #89b4fa22;
+    color: #89b4fa;
+    font-weight: 600;
+  }
 }
 
 // ── Cell helpers ─────────────────────────────────────────────────────────────
@@ -102,21 +138,33 @@
     text-align: center;
     padding: 2rem 1rem;
     color: var(--p-text-muted-color);
-    font-size: 0.8rem;
+    font-size: 0.78rem;
   }
+
+  .callsign-link,
+  .summit-link {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.77rem;
+    font-weight: 600;
+    text-decoration: none;
+    letter-spacing: 0.03em;
+
+    &:hover { text-decoration: underline; }
+  }
+
+  .callsign-link { color: #89b4fa; }
+  .summit-link   { color: #cba6f7; }
 
   .mono-cell {
     font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     color: var(--p-text-secondary-color, #a6adc8);
     letter-spacing: 0.02em;
-
-    &--blue { color: #89b4fa; font-weight: 600; }
   }
 
   .dist-cell {
     font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-    font-size: 0.76rem;
+    font-size: 0.74rem;
     font-variant-numeric: tabular-nums;
 
     &--live { color: #a6e3a1; font-weight: 600; }
@@ -124,27 +172,73 @@
   }
 
   .time-cell {
-    font-size: 0.75rem;
+    font-size: 0.73rem;
     color: var(--p-text-muted-color);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
-  // ── PrimeNG table tweaks ───────────────────────────────────────────────────
-  .p-datatable {
+  .action-cell {
     display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
+    gap: 4px;
+    align-items: center;
+    flex-wrap: nowrap;
   }
 
-  .p-datatable-header { display: none; } // hide built-in header if any
+  .map-btn {
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--p-surface-600);
+    background: transparent;
+    color: var(--p-text-muted-color);
+    font-size: 0.68rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.1s;
 
-  .p-paginator {
-    border-top: 1px solid var(--p-surface-700);
-    border-radius: 0;
-    padding: 0.35rem 0.75rem;
-    font-size: 0.75rem;
-    flex-shrink: 0;
+    &:hover {
+      border-color: var(--p-primary-color);
+      background: var(--p-primary-50, #1e1e2e);
+      color: var(--p-primary-color);
+    }
+  }
+
+  // ── PrimeNG scrollable table — the critical flex chain ────────────────────
+  // p-table renders: .p-datatable > .p-datatable-wrapper > table
+  // We need the wrapper to be the only element that scrolls.
+
+  .p-datatable {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .p-datatable-wrapper {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+
+  .p-datatable-table {
+    width: 100%;
+    table-layout: auto;
+  }
+
+  .p-datatable-thead > tr > th {
+    background: var(--p-surface-800);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.55rem 0.65rem;
+    white-space: nowrap;
+  }
+
+  .p-datatable-tbody > tr > td {
+    padding: 0.38rem 0.65rem;
+    vertical-align: middle;
   }
 }
