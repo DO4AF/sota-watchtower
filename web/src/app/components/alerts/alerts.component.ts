@@ -244,8 +244,7 @@ export class AlertsComponent implements OnInit, OnDestroy {
       if (!q) return true;
       return a.callsign.toLowerCase().includes(q)
         || this.alertSummitRef(a).toLowerCase().includes(q)
-        || String(a.summitName || '').toLowerCase().includes(q)
-        || String(a.frequenciesComments || '').toLowerCase().includes(q);
+        || String(a.summitName || '').toLowerCase().includes(q);
     });
   }
 
@@ -258,8 +257,7 @@ export class AlertsComponent implements OnInit, OnDestroy {
       String(s.summitName || '').toLowerCase().includes(q)       ||
       String(s.frequency || '').toLowerCase().includes(q)        ||
       String(s.mode || '').toLowerCase().includes(q)             ||
-      String(s.postedBy || '').toLowerCase().includes(q)         ||
-      String(s.comments || '').toLowerCase().includes(q)
+      String(s.postedBy || '').toLowerCase().includes(q)
     );
   }
 }

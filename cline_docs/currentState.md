@@ -18,6 +18,12 @@
 
 ## Recent Changes (2026-05-02)
 
+### Frontend — Alerts/Spots table width optimization (comments removed)
+- Removed the **Frequencies/Comments** column from the Alerts table to reduce horizontal width and avoid unnecessary scrolling.
+- Removed the **Comments** column from the Live Spots table for the same reason.
+- Updated Alerts/Spots search behavior so filters only match values visible in the table (removed matching on hidden comments fields).
+
+
 ### Frontend — Tactical activator relevance + summit tooltip regression fix
 - Tactical mode now also limits **activator markers/traces** to only those activators that are relevant to active tactical associations (respecting source chips).
 - This removes non-relevant activators from tactical view and improves focus/noise ratio.

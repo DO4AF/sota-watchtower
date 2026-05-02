@@ -101,8 +101,8 @@ interface AppConfig { telegramBotToken, telegramGroupId, telegramUserId,
 ```
 
 ## Alerts & Spots View
-- Alerts table columns: Date/Time (UTC), Callsign, Summit Ref., Summit Name, Altitude, Points, Frequencies/Comments, Dist. to Summit, Status, Actions.
-- Spots table columns: Time (UTC), Callsign, Frequency, Mode, Summit Ref., Summit Name, Altitude, Points, Posted By, Comments, Actions.
+- Alerts table columns: Date/Time (UTC), Callsign, Summit Ref., Summit Name, Altitude, Points, Dist. to Summit, Status, Actions.
+- Spots table columns: Time (UTC), Callsign, Frequency, Mode, Summit Ref., Summit Name, Altitude, Points, Posted By, Actions.
 - Callsigns render with best-effort country flags from shared `callsign-flag.util.ts`; unknown prefixes show no flag.
 
 ## Environment Variables (set by Amplify)
