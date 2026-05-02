@@ -101,14 +101,23 @@ def handler(event, context):
         #print(json.dumps(result, indent=2, ensure_ascii=False))  # Pretty print the result in JSON format
 
         summit_code = result["associationCode"] + "/" + result["summitCode"]
+        callsign = result.get("activatingCallsign") or result.get("posterCallsign") or ""
+        poster_callsign = result.get("posterCallsign", "")
+        frequency = str(result.get("frequency", "") or "")
+        mode = str(result.get("mode", "") or "")
+        comments = str(result.get("comments", result.get("comment", "")) or "")
 
         # Define the item to be put into DynamoDB
         item = {
-            'callsign': {'S': result["posterCallsign"]},
+            'callsign': {'S': callsign},
             'summit': {'S': summit_code},
             'notified': {'BOOL': False},
             'expiration': {'N': str(expiration_timestamp)},
-            'dateActivated': {'S': result.get("dateActivated", result.get("activationDate", ""))}
+            'dateActivated': {'S': result.get("dateActivated", result.get("activationDate", ""))},
+            'posterCallsign': {'S': poster_callsign},
+            'frequency': {'S': frequency},
+            'mode': {'S': mode},
+            'comments': {'S': comments},
         }
 
         # Put item into DynamoDB table

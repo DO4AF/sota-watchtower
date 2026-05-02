@@ -73,7 +73,12 @@
           <div class="suggestions">
             @for (s of searchSuggestions(); track s.id) {
               <button class="suggestion" type="button" (click)="selectSuggestion(s)">
-                <span class="suggestion__title">{{ s.title }}</span>
+                <span class="suggestion__title">
+                  @if (s.type === 'activator' && callsignFlag(s.title)) {
+                    <span class="callsign-flag">{{ callsignFlag(s.title) }}</span>
+                  }
+                  {{ s.title }}
+                </span>
                 <span class="suggestion__subtitle">{{ s.subtitle }}</span>
                 <span class="suggestion__type">{{ s.type === 'summit' ? 'Summit' : 'Activator' }}</span>
               </button>
@@ -93,7 +98,12 @@
             @for (entry of alertedApproaching(); track entry.callsign + ':' + entry.summitCode) {
               <button class="proximity-item" type="button" (click)="focusProximity(entry)">
                 <div class="proximity-item__meta">
-                  <span class="proximity-item__callsign">{{ entry.callsign }}</span>
+                  <span class="proximity-item__callsign">
+                    @if (callsignFlag(entry.callsign)) {
+                      <span class="callsign-flag">{{ callsignFlag(entry.callsign) }}</span>
+                    }
+                    {{ entry.callsign }}
+                  </span>
                   <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
                   <span class="proximity-item__distance">{{ distanceLabel(entry.distanceKm) }}</span>
                 </div>
@@ -115,7 +125,12 @@
             @for (entry of candidatesApproaching(); track entry.callsign + ':' + entry.summitCode) {
               <button class="proximity-item" type="button" (click)="focusProximity(entry)">
                 <div class="proximity-item__meta">
-                  <span class="proximity-item__callsign">{{ entry.callsign }}</span>
+                  <span class="proximity-item__callsign">
+                    @if (callsignFlag(entry.callsign)) {
+                      <span class="callsign-flag">{{ callsignFlag(entry.callsign) }}</span>
+                    }
+                    {{ entry.callsign }}
+                  </span>
                   <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
                   <span class="proximity-item__distance">{{ distanceLabel(entry.distanceKm) }}</span>
                 </div>

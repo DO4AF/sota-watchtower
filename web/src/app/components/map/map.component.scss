@@ -259,6 +259,13 @@
   }
 }
 
+.callsign-flag {
+  display: inline-block;
+  margin-right: 0.3rem;
+  line-height: 1;
+  vertical-align: baseline;
+}
+
 .proximity-list {
   display: flex;
   flex-direction: column;

@@ -17,6 +17,7 @@ import json
 import os
 import urllib.request
 from datetime import date
+from datetime import datetime
 
 import boto3
 
@@ -25,11 +26,22 @@ dynamodb = boto3.resource('dynamodb')
 s3_client = boto3.client('s3')
 
 
+def parse_sota_date(raw_value: str) -> date | None:
+    """Parse SOTA CSV date fields (DD/MM/YYYY) into date objects."""
+    raw = (raw_value or '').strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, '%d/%m/%Y').date()
+    except ValueError:
+        return None
+
+
 def handler(event, context):
     table_name  = os.environ['SUMMITS_TABLE_NAME']
     bucket_name = os.environ.get('SUMMITS_BUCKET_NAME')
     table = dynamodb.Table(table_name)
-    today = date.today().isoformat()          # "YYYY-MM-DD"
+    today = date.today()
 
     # ── Download CSV ──────────────────────────────────────────────────────────
     print(f"Downloading {SOTA_CSV_URL}")
@@ -65,8 +77,10 @@ def handler(event, context):
                 skipped += 1
                 continue
 
-            valid_from = row.get('ValidFrom', '').strip()
-            valid_to   = row.get('ValidTo', '').strip()
+            valid_from_raw = row.get('ValidFrom', '').strip()
+            valid_to_raw   = row.get('ValidTo', '').strip()
+            valid_from = parse_sota_date(valid_from_raw)
+            valid_to   = parse_sota_date(valid_to_raw)
 
             # Skip summits that are not valid today
             if valid_from and valid_from > today:
@@ -106,8 +120,8 @@ def handler(event, context):
                 'latitude':        lat,
                 'longitude':       lon,
                 'points':          points,
-                'validFrom':       valid_from,
-                'validTo':         valid_to,
+                'validFrom':       valid_from_raw,
+                'validTo':         valid_to_raw,
             })
             written += 1
 

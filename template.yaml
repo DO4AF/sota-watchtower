@@ -16,7 +16,8 @@ Parameters:
     Description: E-mail address for the initial web-UI admin user (Cognito)
     Type: String
   AdminPassword:
-    Description: Initial password for the web-UI admin user (min 8 chars, upper+lower+number+symbol)
+    Description: Initial password for the web-UI admin user (min 8 chars,
+      upper+lower+number+symbol)
     Type: String
     NoEcho: true
 Resources:
@@ -335,160 +336,159 @@ Resources:
   SotaWatchtowerDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardBody:
-        Fn::Sub: |
-          {
-            "start": "-PT72H",
-            "widgets": [
-                {
-                    "height": 10,
-                    "width": 10,
-                    "y": 0,
-                    "x": 13,
-                    "type": "metric",
-                    "properties": {
-                        "metrics": [
-                            [ "AWS/Lambda", "Invocations", "FunctionName", "ActivationZoneMonitorFunction" ]
-                        ],
-                        "view": "timeSeries",
-                        "stacked": false,
-                        "region": "eu-central-1",
-                        "period": 3600,
-                        "stat": "Sum",
-                        "title": "Invocations",
-                        "annotations": {
-                            "horizontal": [
-                                [
-                                    {
-                                        "color": "#f89256",
-                                        "label": "Medium load",
-                                        "value": 200
-                                    },
-                                    {
-                                        "value": 400,
-                                        "label": "Medium load"
-                                    }
-                                ],
-                                {
-                                    "color": "#fe6e73",
-                                    "label": "High load",
-                                    "value": 400,
-                                    "fill": "above"
-                                }
-                            ]
-                        },
-                        "yAxis": {
-                            "left": {
-                                "min": 0,
-                                "label": ""
-                            }
-                        },
-                        "liveData": false
-                    }
-                },
-                {
-                    "height": 11,
-                    "width": 23,
-                    "y": 10,
-                    "x": 0,
-                    "type": "log",
-                    "properties": {
-                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message\n| sort @timestamp desc\n| limit 10000\n| filter @message like /APRS Callsign: .*, APRS Latitude: .*, APRS Longitude: .*, APRS Altitude: /",
-                        "region": "eu-central-1",
-                        "stacked": false,
-                        "title": "APRS data stream",
-                        "view": "table"
-                    }
-                },
-                {
-                    "height": 7,
-                    "width": 6,
-                    "y": 0,
-                    "x": 0,
-                    "type": "metric",
-                    "properties": {
-                        "metrics": [
-                            [ "AWS/Lambda", "Invocations", "FunctionName", "ActivationZoneMonitorFunction" ]
-                        ],
-                        "view": "gauge",
-                        "region": "eu-central-1",
-                        "yAxis": {
-                            "left": {
-                                "min": 0,
-                                "max": 500
-                            }
-                        },
-                        "stat": "Sum",
-                        "period": 3600,
-                        "title": "Callsigns per hour",
-                        "annotations": {
-                            "horizontal": [
-                                {
-                                    "color": "#fe6e73",
-                                    "label": "High load",
-                                    "value": 400,
-                                    "fill": "above"
-                                },
-                                [
-                                    {
-                                        "color": "#f89256",
-                                        "label": "Medium load",
-                                        "value": 200
-                                    },
-                                    {
-                                        "value": 400,
-                                        "label": "Medium load"
-                                    }
-                                ]
-                            ]
-                        },
-                        "liveData": false,
-                        "singleValueFullPrecision": false
-                    }
-                },
-                {
-                    "height": 7,
-                    "width": 7,
-                    "y": 0,
-                    "x": 6,
-                    "type": "log",
-                    "properties": {
-                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message, @logStream, @log\n| sort @timestamp desc\n| limit 10000\n| filter @message like /APRS Callsign: .*, APRS Latitude: .*, APRS Longitude: .*, APRS Altitude: /\n| parse @message /APRS Callsign: (?<callsign>[^,]+), APRS Latitude/\n| stats \n    count(if(callsign like /^D.*/, 1, null)) as D_Callsigns,\n    count(if(callsign like /^OE.*/, 1, null)) as OE_Callsigns,\n    count(if(!(callsign like /^D.*/ or callsign like /^OE.*/), 1, null)) as Other_Callsigns\n",
-                        "region": "eu-central-1",
-                        "stacked": false,
-                        "title": "Country",
-                        "view": "bar"
-                    }
-                },
-                {
-                    "height": 3,
-                    "width": 6,
-                    "y": 7,
-                    "x": 0,
-                    "type": "log",
-                    "properties": {
-                        "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message\n| parse @message /APRS Callsign: (?<callsign>[^,]+), APRS Latitude: [^,]+, APRS Longitude: [^,]+, APRS Altitude: [^,]+/ \n| display @timestamp, callsign\n| sort @timestamp desc\n| limit 1\n| filter @message like /APRS Callsign: .*, APRS Latitude: .*, APRS Longitude: .*, APRS Altitude: /",
-                        "region": "eu-central-1",
-                        "stacked": false,
-                        "title": "Last callsign",
-                        "view": "table"
-                    }
-                },
-                {
-                    "height": 3,
-                    "width": 7,
-                    "y": 7,
-                    "x": 6,
-                    "type": "alarm",
-                    "properties": {
-                        "title": "APRS Signal Health",
-                        "alarms": [
-                            "${AprsMonitorAlarm.Arn}"
-                        ]
-                    }
-                }
-            ]
-          }
+      DashboardBody: !Sub |
+        {
+          "start": "-PT72H",
+          "widgets": [
+              {
+                  "height": 10,
+                  "width": 10,
+                  "y": 0,
+                  "x": 13,
+                  "type": "metric",
+                  "properties": {
+                      "metrics": [
+                          [ "AWS/Lambda", "Invocations", "FunctionName", "ActivationZoneMonitorFunction" ]
+                      ],
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "eu-central-1",
+                      "period": 3600,
+                      "stat": "Sum",
+                      "title": "Invocations",
+                      "annotations": {
+                          "horizontal": [
+                              [
+                                  {
+                                      "color": "#f89256",
+                                      "label": "Medium load",
+                                      "value": 200
+                                  },
+                                  {
+                                      "value": 400,
+                                      "label": "Medium load"
+                                  }
+                              ],
+                              {
+                                  "color": "#fe6e73",
+                                  "label": "High load",
+                                  "value": 400,
+                                  "fill": "above"
+                              }
+                          ]
+                      },
+                      "yAxis": {
+                          "left": {
+                              "min": 0,
+                              "label": ""
+                          }
+                      },
+                      "liveData": false
+                  }
+              },
+              {
+                  "height": 11,
+                  "width": 23,
+                  "y": 10,
+                  "x": 0,
+                  "type": "log",
+                  "properties": {
+                      "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message\n| sort @timestamp desc\n| limit 10000\n| filter @message like /APRS Callsign: .*, APRS Latitude: .*, APRS Longitude: .*, APRS Altitude: /",
+                      "region": "eu-central-1",
+                      "stacked": false,
+                      "title": "APRS data stream",
+                      "view": "table"
+                  }
+              },
+              {
+                  "height": 7,
+                  "width": 6,
+                  "y": 0,
+                  "x": 0,
+                  "type": "metric",
+                  "properties": {
+                      "metrics": [
+                          [ "AWS/Lambda", "Invocations", "FunctionName", "ActivationZoneMonitorFunction" ]
+                      ],
+                      "view": "gauge",
+                      "region": "eu-central-1",
+                      "yAxis": {
+                          "left": {
+                              "min": 0,
+                              "max": 500
+                          }
+                      },
+                      "stat": "Sum",
+                      "period": 3600,
+                      "title": "Callsigns per hour",
+                      "annotations": {
+                          "horizontal": [
+                              {
+                                  "color": "#fe6e73",
+                                  "label": "High load",
+                                  "value": 400,
+                                  "fill": "above"
+                              },
+                              [
+                                  {
+                                      "color": "#f89256",
+                                      "label": "Medium load",
+                                      "value": 200
+                                  },
+                                  {
+                                      "value": 400,
+                                      "label": "Medium load"
+                                  }
+                              ]
+                          ]
+                      },
+                      "liveData": false,
+                      "singleValueFullPrecision": false
+                  }
+              },
+              {
+                  "height": 7,
+                  "width": 7,
+                  "y": 0,
+                  "x": 6,
+                  "type": "log",
+                  "properties": {
+                      "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message, @logStream, @log\n| sort @timestamp desc\n| limit 10000\n| filter @message like /APRS Callsign: .*, APRS Latitude: .*, APRS Longitude: .*, APRS Altitude: /\n| parse @message /APRS Callsign: (?<callsign>[^,]+), APRS Latitude/\n| stats \n    count(if(callsign like /^D.*/, 1, null)) as D_Callsigns,\n    count(if(callsign like /^OE.*/, 1, null)) as OE_Callsigns,\n    count(if(!(callsign like /^D.*/ or callsign like /^OE.*/), 1, null)) as Other_Callsigns\n",
+                      "region": "eu-central-1",
+                      "stacked": false,
+                      "title": "Country",
+                      "view": "bar"
+                  }
+              },
+              {
+                  "height": 3,
+                  "width": 6,
+                  "y": 7,
+                  "x": 0,
+                  "type": "log",
+                  "properties": {
+                      "query": "SOURCE '/sotawatchtower/MasterLogGroup' | fields @timestamp, @message\n| parse @message /APRS Callsign: (?<callsign>[^,]+), APRS Latitude: [^,]+, APRS Longitude: [^,]+, APRS Altitude: [^,]+/ \n| display @timestamp, callsign\n| sort @timestamp desc\n| limit 1\n| filter @message like /APRS Callsign: .*, APRS Latitude: .*, APRS Longitude: .*, APRS Altitude: /",
+                      "region": "eu-central-1",
+                      "stacked": false,
+                      "title": "Last callsign",
+                      "view": "table"
+                  }
+              },
+              {
+                  "height": 3,
+                  "width": 7,
+                  "y": 7,
+                  "x": 6,
+                  "type": "alarm",
+                  "properties": {
+                      "title": "APRS Signal Health",
+                      "alarms": [
+                          "${AprsMonitorAlarm.Arn}"
+                      ]
+                  }
+              }
+          ]
+        }
       DashboardName: SOTA-Watchtower-Dashboard
   AprsMonitorAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -502,15 +502,14 @@ Resources:
       Namespace: AWS/Lambda
       Statistic: Sum
       Dimensions:
-          - Name: FunctionName
-            Value: ActivationZoneMonitorFunction
+        - Name: FunctionName
+          Value: ActivationZoneMonitorFunction
       Period: 300
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       Threshold: 1
       ComparisonOperator: LessThanOrEqualToThreshold
       TreatMissingData: breaching
-
 
   # ─── APRS Positions Table ────────────────────────────────────────────────────
   AprsPositionsTable:
@@ -619,9 +618,9 @@ Resources:
       EndpointConfiguration: REGIONAL
       TracingEnabled: true
       Cors:
-        AllowOrigin: "'*'"
-        AllowHeaders: "'Authorization,Content-Type'"
-        AllowMethods: "'GET,PUT,OPTIONS'"
+        AllowOrigin: '''*'''
+        AllowHeaders: '''Authorization,Content-Type'''
+        AllowMethods: '''GET,PUT,OPTIONS'''
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
         AddDefaultAuthorizerToCorsPreflight: false
@@ -702,9 +701,12 @@ Resources:
     Properties:
       CorsConfiguration:
         CorsRules:
-          - AllowedHeaders: ['*']
-            AllowedMethods: [GET]
-            AllowedOrigins: ['*']
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+            AllowedOrigins:
+              - '*'
             MaxAge: 86400
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
@@ -778,9 +780,12 @@ Resources:
       Environment:
         Variables:
           SOTAALERTSTABLE_TABLE_NAME: !Ref SotaAlertsTable
+          SUMMITS_TABLE_NAME: !Ref SummitsTable
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref SotaAlertsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref SummitsTable
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup
@@ -810,9 +815,12 @@ Resources:
       Environment:
         Variables:
           CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
+          SUMMITS_TABLE_NAME: !Ref SummitsTable
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref SummitsTable
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup
@@ -1097,7 +1105,7 @@ Resources:
             paths:
               - 'web/node_modules/**/*'
       CustomRules:
-        - Source: '</^((?!\.(css|gif|ico|jpg|js|png|txt|svg|woff|ttf|map|json)$).)*$/'
+        - Source: </^((?!\.(css|gif|ico|jpg|js|png|txt|svg|woff|ttf|map|json)$).)*$/
           Target: /index.html
           Status: '200'
       EnvironmentVariables:

@@ -16,6 +16,7 @@ import { ApiService, AprsPosition } from '../../services/api.service';
 import { WebSocketService } from '../../services/websocket.service';
 import { EventLogService } from '../../services/event-log.service';
 import { environment } from '../../../environments/environment';
+import { getCallsignFlag } from '../../shared/callsign-flag.util';
 
 // ─── Summit point colors — exact SOTLAS color scheme ────────────────────────
 // SOTA only assigns 1, 2, 4, 6, 8, 10 points (no odd increments 3/5/7/9).
@@ -81,6 +82,7 @@ function makeActivatorIcon(callsign: string, freshness: Freshness, hasActiveAler
   const alertBadge = hasActiveAlert
     ? '<span class="walker-marker__alert-badge" title="Active alert">🔔</span>'
     : '';
+  const callsignFlag = getCallsignFlag(callsign);
   return L.divIcon({
     className: '',
     html: `
@@ -90,7 +92,7 @@ function makeActivatorIcon(callsign: string, freshness: Freshness, hasActiveAler
           ${pulse}
           <span class="walker-marker__emoji">🚶</span>
         </div>
-        <span class="walker-marker__label" style="border-color:${freshness.color}66">${callsign}</span>
+        <span class="walker-marker__label" style="border-color:${freshness.color}66">${callsignFlag ? `${callsignFlag} ` : ''}${callsign}</span>
       </div>`,
     iconSize:    [52, 56],
     iconAnchor:  [26, 22],
@@ -669,7 +671,7 @@ export class MapComponent implements OnInit, OnDestroy {
             });
             marker.bindPopup(popup, { className: 'sota-popup-wrap' });
             marker.bindTooltip(
-              `<b>${cs}</b><br><small>${freshness.label}</small>`,
+              `<b>${this.callsignFlag(cs) ? `${this.callsignFlag(cs)} ` : ''}${cs}</b><br><small>${freshness.label}</small>`,
               { direction: 'top', className: 'sota-tooltip' }
             );
 
@@ -860,6 +862,10 @@ export class MapComponent implements OnInit, OnDestroy {
     return callsign.toUpperCase().replace(/-\d+$/, '');
   }
 
+  callsignFlag(callsign: string): string {
+    return getCallsignFlag(callsign);
+  }
+
   private haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -881,9 +887,10 @@ export class MapComponent implements OnInit, OnDestroy {
     const t        = new Date(pos.lastSeen).toLocaleString();
     const basecs   = cs.replace(/-\d+$/, '');   // strip SSID for SOTLAS URL
     const sotlasUrl = `https://sotl.as/activators/${basecs}`;
+    const flag = this.callsignFlag(cs);
     return `
       <div class="sota-popup">
-        <div class="sota-popup__title">📻 ${cs}</div>
+        <div class="sota-popup__title">📻 ${flag ? `${flag} ` : ''}${cs}</div>
         <div class="sota-popup__row"><span>Last seen</span><span>${freshness.label}</span></div>
         <div class="sota-popup__row"><span>Time</span><span>${t}</span></div>
         <div class="sota-popup__row"><span>Latitude</span><span>${lat}°</span></div>

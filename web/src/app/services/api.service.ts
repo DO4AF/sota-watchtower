@@ -7,16 +7,34 @@ import { environment } from '../../environments/environment';
 export interface SotaAlert {
   callsign: string;
   summit: string;
+  summitRef?: string;
+  dateActivated?: string;
+  summitName?: string;
+  altitude?: number;
+  points?: number;
+  frequenciesComments?: string;
+  frequency?: string;
+  mode?: string;
+  comments?: string;
   notified?: boolean;
   expiration?: number;
 }
 
 export interface SotaSpot {
-  activatorCallsign: string;
-  summitCode: string;
+  time: string;
+  callsign: string;
   frequency: string;
   mode: string;
-  timeStamp: string;
+  summitRef: string;
+  summitName: string;
+  altitude: number;
+  points: number;
+  postedBy: string;
+  comments: string;
+  // Backward-compatible aliases
+  activatorCallsign?: string;
+  summitCode?: string;
+  timeStamp?: string;
 }
 
 export interface TrackPoint {

@@ -31,6 +31,8 @@ web/src/
     │   ├── theme.service.ts    # Dark/light mode toggle (localStorage)
     │   ├── websocket.service.ts # WebSocket connection management
     │   └── event-log.service.ts # (planned) Event log for debug panel
+    ├── shared/
+    │   └── callsign-flag.util.ts # shared callsign→country-flag heuristic mapper
     └── components/
         ├── map/            # Leaflet map with summits, alerts, walkers
         ├── alerts/         # SOTA alerts + spots table
@@ -71,17 +73,29 @@ The app uses a **left sidebar** layout:
 - **Quick Search overlay**: live summit/activator suggestions while typing; selecting a suggestion centers/zooms map
 - **Approaching panels**: right-side overlay sections for alerted activators (<2 km to alerted summit) and APRS-active candidates without alert (<2 km to nearest summit), including distance progress bars
 - **Debug log panel**: Toggleable side panel showing events
+- Callsign country flags are shown (when resolvable) in activator-related UI text.
 - Refreshes APRS positions every 60 seconds
 
 ## API Service Interfaces
 ```typescript
-interface SotaAlert { callsign, summit, notified?, expiration? }
-interface SotaSpot { activatorCallsign, summitCode, frequency, mode, timeStamp }
+interface SotaAlert {
+  callsign, summit, summitRef?, dateActivated?, summitName?, altitude?, points?,
+  frequenciesComments?, frequency?, mode?, comments?, notified?, expiration?
+}
+interface SotaSpot {
+  time, callsign, frequency, mode, summitRef, summitName, altitude, points,
+  postedBy, comments, activatorCallsign?, summitCode?, timeStamp?
+}
 interface AprsPosition { callsign, latitude, longitude, altitude, lastSeen, history? }
 interface AppConfig { telegramBotToken, telegramGroupId, telegramUserId,
                       frequencyFilterPattern, sotaAssociations,
                       activationZoneDistanceMeters, activationZoneAltitudeDeltaMeters }
 ```
+
+## Alerts & Spots View
+- Alerts table columns: Date/Time (UTC), Callsign, Summit Ref., Summit Name, Altitude, Points, Frequencies/Comments, Dist. to Summit, Status, Actions.
+- Spots table columns: Time (UTC), Callsign, Frequency, Mode, Summit Ref., Summit Name, Altitude, Points, Posted By, Comments, Actions.
+- Callsigns render with best-effort country flags from shared `callsign-flag.util.ts`; unknown prefixes show no flag.
 
 ## Environment Variables (set by Amplify)
 ```

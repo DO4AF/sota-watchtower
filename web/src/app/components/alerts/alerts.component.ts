@@ -12,6 +12,7 @@ import { catchError, of } from 'rxjs';
 import { ApiService, SotaAlert, SotaSpot, AprsPosition } from '../../services/api.service';
 import { WebSocketService } from '../../services/websocket.service';
 import { environment } from '../../../environments/environment';
+import { getCallsignFlag } from '../../shared/callsign-flag.util';
 
 /** Haversine distance in km between two lat/lon points */
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -157,10 +158,26 @@ export class AlertsComponent implements OnInit, OnDestroy {
     return this.summitCoordMap.get(summitCode);
   }
 
+  alertSummitRef(alert: SotaAlert): string {
+    return alert.summitRef || alert.summit;
+  }
+
+  spotSummitRef(spot: SotaSpot): string {
+    return spot.summitRef || spot.summitCode || '';
+  }
+
+  spotCallsign(spot: SotaSpot): string {
+    return spot.callsign || spot.activatorCallsign || '';
+  }
+
+  callsignFlag(callsign: string): string {
+    return getCallsignFlag(callsign);
+  }
+
   distanceToSummit(alert: SotaAlert): string {
     const aprs = this.lookupPosition(alert.callsign);
     if (!aprs) return '—';
-    const summit = this.summitCoordMap.get(alert.summit);
+    const summit = this.summitCoordMap.get(this.alertSummitRef(alert));
     if (!summit) return '?';
     const km = haversineKm(
       parseFloat(aprs.latitude), parseFloat(aprs.longitude),
@@ -225,7 +242,10 @@ export class AlertsComponent implements OnInit, OnDestroy {
     return this.alerts().filter(a => {
       if (this.showOnlyWithPosition && !this.lookupPosition(a.callsign)) return false;
       if (!q) return true;
-      return a.callsign.toLowerCase().includes(q) || a.summit.toLowerCase().includes(q);
+      return a.callsign.toLowerCase().includes(q)
+        || this.alertSummitRef(a).toLowerCase().includes(q)
+        || String(a.summitName || '').toLowerCase().includes(q)
+        || String(a.frequenciesComments || '').toLowerCase().includes(q);
     });
   }
 
@@ -233,10 +253,13 @@ export class AlertsComponent implements OnInit, OnDestroy {
     const q = this.spotFilter.trim().toLowerCase();
     if (!q) return this.spots();
     return this.spots().filter(s =>
-      s.activatorCallsign.toLowerCase().includes(q) ||
-      s.summitCode.toLowerCase().includes(q)        ||
-      s.frequency.toLowerCase().includes(q)         ||
-      s.mode.toLowerCase().includes(q)
+      this.spotCallsign(s).toLowerCase().includes(q)             ||
+      this.spotSummitRef(s).toLowerCase().includes(q)            ||
+      String(s.summitName || '').toLowerCase().includes(q)       ||
+      String(s.frequency || '').toLowerCase().includes(q)        ||
+      String(s.mode || '').toLowerCase().includes(q)             ||
+      String(s.postedBy || '').toLowerCase().includes(q)         ||
+      String(s.comments || '').toLowerCase().includes(q)
     );
   }
 }

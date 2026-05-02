@@ -18,6 +18,25 @@
 
 ## Recent Changes (2026-05-02)
 
+### Backend — Summits validity + normalized web payloads
+- **RefreshSummitsFunction validity fix:** SOTA CSV `ValidFrom`/`ValidTo` is now parsed as `DD/MM/YYYY` dates before filtering. This fixes false positives where inactive summits could still appear on the map (e.g. expired summits such as Ulrichsberg).
+- **GetSotaAlertsFunction enrichment:** alert items persisted in `SotaAlertsTable` now additionally include `frequency`, `mode`, `comments`, and `posterCallsign`; `callsign` now prefers `activatingCallsign` (fallback: `posterCallsign`).
+- **GetAlertsWebFunction normalized response:** `/alerts` now returns enriched fields for the UI (`summitRef`, `summitName`, `altitude`, `points`, `frequenciesComments`) by joining `SotaAlertsTable` with `SummitsTable`.
+- **GetSpotsWebFunction normalized response:** `/spots` now returns normalized rows (`time`, `callsign`, `frequency`, `mode`, `summitRef`, `summitName`, `altitude`, `points`, `postedBy`, `comments`) with summit metadata enriched from `SummitsTable`.
+- `template.yaml` updated so `GetAlertsWebFunction` and `GetSpotsWebFunction` receive `SUMMITS_TABLE_NAME` and `DynamoDBReadPolicy` access to `SummitsTable`.
+
+### Frontend — Alerts/Spots table expansion + callsign flags
+- **Alerts table** now shows: `Date/Time (UTC)`, `Callsign`, `Summit Ref.`, `Summit Name`, `Altitude`, `Points`, `Frequencies/Comments`, `Dist. to Summit`, `Status`, `Actions`.
+- **Spots table** now shows: `Time (UTC)`, `Callsign`, `Frequency`, `Mode`, `Summit Ref.`, `Summit Name`, `Altitude`, `Points`, `Posted By`, `Comments`, `Actions`.
+- Added shared callsign-flag utility: `web/src/app/shared/callsign-flag.util.ts`.
+- Callsign flags are now rendered (when known; no flag fallback for unknown prefixes) in:
+  - Alerts callsign cells
+  - Spots callsign + posted-by cells
+  - Map quick-search activator suggestions
+  - Map approaching/candidate overlays
+  - Map activator marker labels, tooltips, and popups
+- Required frontend validation run: `cd web && npx ng build --configuration production` ✅ (same known warnings only: SCSS budget + Leaflet CommonJS).
+
 ### Frontend — Map Marker & Overlay Refinements
 - **Quick Search panel moved** from top-left to **top-center** for better map balance.
 - Clicking entries in **Approaching** and **Candidates** now pans/zooms the map **without** showing a temporary jump label marker.

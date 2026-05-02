@@ -40,7 +40,12 @@
 ### GetAlertsWebFunction / GetSpotsWebFunction
 - **Trigger**: GET /alerts, GET /spots (Cognito auth)
 - **Runtime**: Python 3.12
-- **Returns**: Items from SotaAlertsTable / fetches from SOTA API
+- **GetAlertsWebFunction**:
+  - Reads `SotaAlertsTable` and enriches with summit metadata from `SummitsTable`
+  - Returns normalized/enriched alert rows for web table: `dateActivated`, `callsign`, `summitRef`, `summitName`, `altitude`, `points`, `frequenciesComments`, `notified`, etc.
+- **GetSpotsWebFunction**:
+  - Fetches recent SOTA spots, filters by configured associations, enriches with `SummitsTable`
+  - Returns normalized spot rows: `time`, `callsign`, `frequency`, `mode`, `summitRef`, `summitName`, `altitude`, `points`, `postedBy`, `comments`
 
 ### GetConfigFunction / PutConfigFunction
 - **Trigger**: GET/PUT /config (Cognito auth)
@@ -97,8 +102,11 @@
 ### SotaAlertsTable
 ```
 PK: callsign (String)
-Attributes: summit, frequency, mode, date, description, dateActivated (ISO8601), notified (bool), expiration (TTL)
+Attributes: summit, frequency, mode, comments, posterCallsign, dateActivated (ISO8601), notified (bool), expiration (TTL)
 ```
+
+## Notes on Data Refresh
+- `RefreshSummitsFunction` now parses SOTA CSV validity dates (`ValidFrom`/`ValidTo`, format `DD/MM/YYYY`) as real dates before filtering, preventing expired summits from entering `SummitsTable` / static `summits.json`.
 
 ### ConfigTable
 ```
