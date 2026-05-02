@@ -55,6 +55,7 @@
 - **Alert table** has a new **Distance** column: when APRS position data is available for the alerting callsign, the haversine distance from the activator to the summit is computed client-side and shown (e.g. "2.3 km" or "450 m").
 - **Map component**: clicking on an activator's **trace polyline** now pans+zooms the map to the activator marker (minimum zoom 13).
 - **Event Log** is now fully filterable: free-text search across category+message, plus per-severity toggle buttons (INFO / SUCCESS / WARN / ERROR).
+- **Event Log layout fixed**: aligned the routed host/flex sizing with Alerts/Spots (`:host` + `min-height:0` flex chain), so the table area now reliably ends at the window bottom and scrolls internally.
 - **Config page** updated: replaced "⚠ warning about Telegram credentials requiring redeployment" with "ℹ info: changes take effect immediately."
 
 ### Docs
