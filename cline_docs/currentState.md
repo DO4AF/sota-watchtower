@@ -23,6 +23,7 @@
 - Clicking entries in **Approaching** and **Candidates** now pans/zooms the map **without** showing a temporary jump label marker.
 - **Approaching/Candidates cards compacted**: activator, summit, and distance now render on a single text line with the progress bar below to save vertical space.
 - **Candidates overlay section height increased**: candidate list panel now gets roughly **2×** the vertical space of the Approaching panel, allowing more candidate rows to be visible.
+- **Regression fix (overlay sizing)**: right overlay now uses explicit top+bottom anchoring so Approaching/Candidates panels no longer collapse into thin boxes; content renders again with the intended 1:2 height split and internal scrolling.
 - **All summit markers now use the same radius** (minimum size / 5px); summit point value is still encoded by color.
 - **Activator markers now show a bell badge (🔔)** when the activator has an active alert (SSID-insensitive callsign match).
 - **Summit glow now applies only to planned activations for today (UTC)**.

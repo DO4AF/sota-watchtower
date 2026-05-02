@@ -110,9 +110,9 @@
 
   &--right-top {
     top: 10px;
+    bottom: 56px;
     right: 10px;
     width: min(360px, calc(100% - 20px));
-    max-height: calc(100% - 56px);
     overflow: hidden;
 
     .panel--approaching {
