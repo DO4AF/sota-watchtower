@@ -193,6 +193,24 @@ html, body {
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
+  &__alert-badge {
+    position: absolute;
+    top: -5px;
+    right: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    line-height: 1;
+    background: #f59e0b;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.8);
+    z-index: 3;
+  }
 }
 
 // Pulse ring — absolutely centered on the badge
@@ -217,7 +235,7 @@ html, body {
 // ─── Summit glow (alerted summits) ───────────────────────────────────────────
 
 // The .summit-glow class is added to a larger CircleMarker rendered behind
-// each summit that has a planned activation within 7 days.
+// each summit that has a planned activation today (UTC).
 .summit-glow path {
   animation: summit-glow-pulse 2.5s ease-in-out infinite;
 }

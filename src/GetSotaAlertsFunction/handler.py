@@ -107,7 +107,8 @@ def handler(event, context):
             'callsign': {'S': result["posterCallsign"]},
             'summit': {'S': summit_code},
             'notified': {'BOOL': False},
-            'expiration': {'N': str(expiration_timestamp)}
+            'expiration': {'N': str(expiration_timestamp)},
+            'dateActivated': {'S': result.get("dateActivated", result.get("activationDate", ""))}
         }
 
         # Put item into DynamoDB table

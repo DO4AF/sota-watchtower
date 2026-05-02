@@ -18,6 +18,21 @@
 
 ## Recent Changes (2026-05-02)
 
+### Frontend — Map Marker & Overlay Refinements
+- **Quick Search panel moved** from top-left to **top-center** for better map balance.
+- Clicking entries in **Approaching** and **Candidates** now pans/zooms the map **without** showing a temporary jump label marker.
+- **All summit markers now use the same radius** (minimum size / 5px); summit point value is still encoded by color.
+- **Activator markers now show a bell badge (🔔)** when the activator has an active alert (SSID-insensitive callsign match).
+- **Summit glow now applies only to planned activations for today (UTC)**.
+- Glow rings are rendered via Leaflet **SVG renderer** (while summit dots stay on canvas) so pulse animation works reliably.
+
+### Frontend — Favicon
+- Added a new **globe-themed SVG favicon** at `web/public/favicon.svg`.
+- Updated `web/src/index.html` to use the new SVG favicon.
+
+### Backend — Alert Data Enrichment
+- `GetSotaAlertsFunction` now persists `dateActivated` into `SotaAlertsTable` items so the frontend can reliably filter “planned today” glow markers.
+
 ### Frontend — Map Search + Proximity Panels
 - **Quick Search panel added to Map view**: live suggestions while typing for both **summits** (code/name) and **activators** (callsign). Clicking a suggestion (or pressing Enter) centers and zooms the map to the selected target.
 - **Approaching activators panel added**: shows activators with an **active alert** whose current APRS position is **< 2 km** from their alerted summit.

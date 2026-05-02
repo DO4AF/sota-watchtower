@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SOTA Watchtower globe icon">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#58a6ff"/>
+      <stop offset="100%" stop-color="#1f6feb"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#0d1117"/>
+  <circle cx="32" cy="32" r="18" fill="none" stroke="url(#g)" stroke-width="4"/>
+  <ellipse cx="32" cy="32" rx="8" ry="18" fill="none" stroke="url(#g)" stroke-width="3"/>
+  <path d="M14 32h36" fill="none" stroke="url(#g)" stroke-width="3"/>
+  <path d="M17 24c4 2 8 3 15 3s11-1 15-3" fill="none" stroke="url(#g)" stroke-width="2.5"/>
+  <path d="M17 40c4-2 8-3 15-3s11 1 15 3" fill="none" stroke="url(#g)" stroke-width="2.5"/>
+</svg>

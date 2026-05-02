@@ -97,7 +97,7 @@
 ### SotaAlertsTable
 ```
 PK: callsign (String)
-Attributes: summit, frequency, mode, date, description, notified (bool), expiration (TTL)
+Attributes: summit, frequency, mode, date, description, dateActivated (ISO8601), notified (bool), expiration (TTL)
 ```
 
 ### ConfigTable

@@ -101,10 +101,11 @@
   gap: 10px;
   pointer-events: none;
 
-  &--left-top {
+  &--top-center {
     top: 10px;
-    left: 10px;
-    width: min(440px, calc(100% - 20px));
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(520px, calc(100% - 20px));
   }
 
   &--right-top {
@@ -299,9 +300,10 @@
 }
 
 @media (max-width: 900px) {
-  .map-overlay--left-top,
+  .map-overlay--top-center,
   .map-overlay--right-top {
     position: static;
+    transform: none;
     width: 100%;
     max-height: none;
   }

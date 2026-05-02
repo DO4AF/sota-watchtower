@@ -74,14 +74,18 @@ function activatorFreshness(lastSeen: string): Freshness {
 
 // ─── Activator icon ──────────────────────────────────────────────────────────
 
-function makeActivatorIcon(callsign: string, freshness: Freshness): L.DivIcon {
+function makeActivatorIcon(callsign: string, freshness: Freshness, hasActiveAlert: boolean): L.DivIcon {
   const pulse = freshness.pulse
     ? `<div class="walker-pulse" style="border-color:${freshness.color}"></div>`
+    : '';
+  const alertBadge = hasActiveAlert
+    ? '<span class="walker-marker__alert-badge" title="Active alert">🔔</span>'
     : '';
   return L.divIcon({
     className: '',
     html: `
       <div class="walker-marker" style="opacity:${freshness.opacity}">
+        ${alertBadge}
         <div class="walker-marker__badge" style="border-color:${freshness.color};background:${freshness.color}33;box-shadow:0 0 8px ${freshness.color}66">
           ${pulse}
           <span class="walker-marker__emoji">🚶</span>
@@ -166,6 +170,8 @@ export class MapComponent implements OnInit, OnDestroy {
 
   // Canvas renderer — all CircleMarkers share a single <canvas> element
   private canvasRenderer = L.canvas({ padding: VIEWPORT_PAD });
+  // SVG renderer is used for animated glow rings (CSS animation targets SVG paths)
+  private svgRenderer = L.svg({ padding: VIEWPORT_PAD });
 
   // Map internals
   private map!:           L.Map;
@@ -178,6 +184,7 @@ export class MapComponent implements OnInit, OnDestroy {
   private activators     = new Map<string, ActivatorState>();
   private aprsByBaseCallsign = new Map<string, AprsPosition>();
   private activeAlerts: ActiveAlert[] = [];
+  private activeAlertBaseCallsigns = new Set<string>();
   private summitByCode = new Map<string, SummitRecord>();
 
   /**
@@ -185,7 +192,7 @@ export class MapComponent implements OnInit, OnDestroy {
    * CircleMarkers are created on demand when a summit enters the viewport.
    */
   private allSummits:      SummitRecord[]                    = [];
-  private alertedSummits   = new Set<string>();
+  private todayPlannedSummits = new Set<string>();
 
   /**
    * Index of currently rendered markers by summit code.
@@ -348,8 +355,20 @@ export class MapComponent implements OnInit, OnDestroy {
       next: ({ alerts }) => {
         // Build the set of currently active alerts
         const now       = Date.now();
-        this.alertedSummits.clear();
+        this.todayPlannedSummits.clear();
         this.activeAlerts = [];
+        this.activeAlertBaseCallsigns.clear();
+
+        const todayUtc = new Date().toISOString().slice(0, 10);
+        const alertDateKey = (alert: Record<string, unknown>): string | null => {
+          const rawDate = String(alert['dateActivated'] ?? alert['date_activated'] ?? alert['activationDate'] ?? '');
+          if (!rawDate) return null;
+          const isoMatch = rawDate.match(/^(\d{4}-\d{2}-\d{2})/);
+          if (isoMatch) return isoMatch[1];
+          const ts = new Date(rawDate).getTime();
+          if (Number.isNaN(ts)) return null;
+          return new Date(ts).toISOString().slice(0, 10);
+        };
 
         const isActiveAlert = (alert: Record<string, unknown>): boolean => {
           const expiration = Number(alert['expiration']);
@@ -371,15 +390,21 @@ export class MapComponent implements OnInit, OnDestroy {
           if (!isActiveAlert(a as Record<string, unknown>)) return;
           const code = String(a.summit ?? a.summitCode ?? '');
           const callsign = String(a.callsign ?? a.activatorCallsign ?? '');
-          if (code) this.alertedSummits.add(code);
+          const alertDate = alertDateKey(a as Record<string, unknown>);
+          if (code && alertDate === todayUtc) this.todayPlannedSummits.add(code);
           if (callsign && code) {
-            this.activeAlerts.push({
+            const active = {
               callsign,
               baseCallsign: this.normalizeCallsign(callsign),
               summit: code,
-            });
+            };
+            this.activeAlerts.push(active);
+            this.activeAlertBaseCallsigns.add(active.baseCallsign);
           }
         });
+
+        // Refresh activator icons so alert badges reflect latest alert set immediately.
+        this.loadActivators();
 
         // Load summit GeoJSON (may come from S3 or Lambda)
         loadGeojson().then(geojson => {
@@ -400,7 +425,7 @@ export class MapComponent implements OnInit, OnDestroy {
             this.allSummits.push({
               code, name, elevationM: elev, assoc, region, points,
               color:  summitColor(points),
-              radius: Math.round(5 + (points - 1) * 0.33),   // 1pt=5px, 10pt=8px
+              radius: 5,
               lat:    coords[1],
               lon:    coords[0],
             });
@@ -421,7 +446,9 @@ export class MapComponent implements OnInit, OnDestroy {
       },
       error: () => {
         // Even if alerts fail, still load summits
+        this.todayPlannedSummits.clear();
         this.activeAlerts = [];
+        this.activeAlertBaseCallsigns.clear();
         loadGeojson().then(geojson => {
           this.allSummits = [];
           geojson.features.forEach(f => {
@@ -436,7 +463,7 @@ export class MapComponent implements OnInit, OnDestroy {
             this.allSummits.push({
               code, name, elevationM: elev, assoc, region, points,
               color:  summitColor(points),
-              radius: Math.round(5 + (points - 1) * 0.33),
+              radius: 5,
               lat:    coords[1],
               lon:    coords[0],
             });
@@ -530,9 +557,9 @@ export class MapComponent implements OnInit, OnDestroy {
 
       // Glow ring for alerted summit
       let glow: L.CircleMarker | null = null;
-      if (this.alertedSummits.has(s.code)) {
+      if (this.todayPlannedSummits.has(s.code)) {
         glow = L.circleMarker(latlng, {
-          renderer:    this.canvasRenderer,
+          renderer:    this.svgRenderer,
           radius:      10,
           fillColor:   s.color,
           color:       s.color,
@@ -606,6 +633,7 @@ export class MapComponent implements OnInit, OnDestroy {
           const cs        = pos.callsign;
           const baseCs    = this.normalizeCallsign(cs);
           const freshness = activatorFreshness(pos.lastSeen);
+          const hasActiveAlert = this.activeAlertBaseCallsigns.has(baseCs);
           const latlng: L.LatLngExpression = [
             parseFloat(pos.latitude),
             parseFloat(pos.longitude),
@@ -629,14 +657,14 @@ export class MapComponent implements OnInit, OnDestroy {
           if (this.activators.has(cs)) {
             const st = this.activators.get(cs)!;
             st.marker.setLatLng(latlng);
-            st.marker.setIcon(makeActivatorIcon(cs, freshness));
+            st.marker.setIcon(makeActivatorIcon(cs, freshness, hasActiveAlert));
             st.marker.setPopupContent(popup);
             st.trace.setLatLngs(tracePoints);
             st.trace.setStyle({ color: freshness.color });
             st.positions = [pos];
           } else {
             const marker = L.marker(latlng, {
-              icon:         makeActivatorIcon(cs, freshness),
+              icon:         makeActivatorIcon(cs, freshness, hasActiveAlert),
               zIndexOffset: 1000,
             });
             marker.bindPopup(popup, { className: 'sota-popup-wrap' });
@@ -704,7 +732,7 @@ export class MapComponent implements OnInit, OnDestroy {
   }
 
   focusProximity(entry: ProximityEntry): void {
-    this.focusMap(entry.activatorLat, entry.activatorLon, 14, `${entry.callsign} → ${entry.summitCode}`);
+    this.focusMap(entry.activatorLat, entry.activatorLon, 14);
   }
 
   private updateSearchSuggestions(): void {
