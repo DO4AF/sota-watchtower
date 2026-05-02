@@ -62,7 +62,7 @@
           </tr>
         </ng-template>
         <ng-template #body let-alert>
-          <tr>
+          <tr [ngClass]="alertRowClass(alert)">
             <td>
               <span class="time-cell">{{ alert.dateActivated | date:'yyyy-MM-dd HH:mm':'UTC' }}</span>
             </td>
@@ -151,7 +151,7 @@
           </tr>
         </ng-template>
         <ng-template #body let-spot>
-          <tr>
+          <tr [ngClass]="spotRowClass(spot)">
             <td><span class="time-cell">{{ spot.time | date:'HH:mm':'UTC' }}</span></td>
             <td>
               <a class="callsign-link" [href]="sotlasActivatorUrl(spotCallsign(spot))" target="_blank" rel="noopener">

@@ -254,6 +254,7 @@ export class MapComponent implements OnInit, OnDestroy {
   searchQuery = '';
 
   readonly APPROACHING_DISTANCE_KM = 2;
+  readonly MAP_ALERT_MAX_OVERDUE_MINUTES = 60;
   readonly RECENT_SPOT_WINDOW_MINUTES = 60;
 
   readonly LABEL_ZOOM = 12;
@@ -520,21 +521,20 @@ export class MapComponent implements OnInit, OnDestroy {
       return new Date(ts).toISOString().slice(0, 10);
     };
 
-    const isActiveAlert = (alert: Record<string, unknown>): boolean => {
+    const isRelevantForMapWidgets = (alert: Record<string, unknown>): boolean => {
       const expiration = Number(alert['expiration']);
-      if (!Number.isNaN(expiration) && expiration > 0) {
-        return expiration * 1000 > now;
+      if (!Number.isNaN(expiration) && expiration > 0 && expiration * 1000 <= now) {
+        return false;
       }
 
-      const rawDate = String(alert['dateActivated'] ?? alert['date_activated'] ?? alert['activationDate'] ?? '');
-      if (!rawDate) return true;
-      const ts = new Date(rawDate).getTime();
-      if (Number.isNaN(ts)) return true;
-      return ts >= now - 6 * 3_600_000;
+      const rawDate = String(alert['dateActivated'] ?? alert['date_activated'] ?? alert['activationDate'] ?? '').trim();
+      const alertTimeMs = this.parseAlertTimeMs(rawDate);
+      if (alertTimeMs === null) return true; // keep visible when timestamp is missing/invalid
+      return alertTimeMs >= now - this.MAP_ALERT_MAX_OVERDUE_MINUTES * 60_000;
     };
 
     alerts.forEach(a => {
-      if (!isActiveAlert(a)) return;
+      if (!isRelevantForMapWidgets(a)) return;
       const code = String(a['summit'] ?? a['summitCode'] ?? a['summitRef'] ?? '');
       const callsign = String(a['callsign'] ?? a['activatorCallsign'] ?? '');
       const alertTimeRaw = String(a['dateActivated'] ?? a['date_activated'] ?? a['activationDate'] ?? '').trim();

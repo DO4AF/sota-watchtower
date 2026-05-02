@@ -18,6 +18,19 @@
 
 ## Recent Changes (2026-05-02)
 
+### Frontend — Map alert recency + Alerts/Spots freshness highlighting and filtering
+- **Map widgets alert recency rule updated:** overdue alerts are no longer kept indefinitely in map widget context.
+  - Alerts are now retained on map widgets only when they are future/current or at most **60 minutes overdue**.
+  - Alerts with **missing/invalid timestamps remain visible** (but are not time-highlighted), per UX decision.
+  - Expired alerts (based on `expiration`) are still excluded.
+- **Alerts table highlighting added:** alerts with valid activation time within **±60 minutes** of now are highlighted in green.
+- **Spots table freshness behavior updated:**
+  - spots older than **6 hours** are now hidden (when timestamp is valid)
+  - spots with valid time not older than **30 minutes** are highlighted in green
+  - spots with missing/invalid timestamps stay visible and are never highlighted
+- **Alerts/Spots table typography harmonized:** standardized body/time/distance/link sizing for more consistent column readability across both tables.
+- Validation rerun: `cd web && npx ng build --configuration production` ✅ (known warnings unchanged: SCSS budget + Leaflet CommonJS).
+
 ### Frontend — Map legend + alerted/upcoming panel semantics update
 - **Legend updated** to match current map behavior:
   - summit point colors now shown as **discrete original SOTLAS buckets** (`1/2/4/6/8/10`) instead of an old gradient bar

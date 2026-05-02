@@ -54,6 +54,10 @@ export class AlertsComponent implements OnInit, OnDestroy {
   spotFilter           = '';
   showOnlyWithPosition = false;
 
+  readonly ALERT_HIGHLIGHT_WINDOW_MINUTES = 60;
+  readonly SPOT_HIGHLIGHT_WINDOW_MINUTES = 30;
+  readonly SPOT_MAX_AGE_HOURS = 6;
+
   private aprsMap       = new Map<string, AprsPosition>();
   private summitCoordMap = new Map<string, { lat: number; lon: number }>();
 
@@ -250,14 +254,73 @@ export class AlertsComponent implements OnInit, OnDestroy {
 
   get filteredSpots(): SotaSpot[] {
     const q = this.spotFilter.trim().toLowerCase();
-    if (!q) return this.spots();
-    return this.spots().filter(s =>
-      this.spotCallsign(s).toLowerCase().includes(q)             ||
-      this.spotSummitRef(s).toLowerCase().includes(q)            ||
-      String(s.summitName || '').toLowerCase().includes(q)       ||
-      String(s.frequency || '').toLowerCase().includes(q)        ||
-      String(s.mode || '').toLowerCase().includes(q)             ||
-      String(s.postedBy || '').toLowerCase().includes(q)
-    );
+    const now = Date.now();
+    const maxAgeMs = this.SPOT_MAX_AGE_HOURS * 3_600_000;
+
+    return this.spots().filter(s => {
+      const spotTs = this.spotTimeMs(s);
+      const withinAgeWindow = spotTs === null || (now - spotTs) <= maxAgeMs;
+      if (!withinAgeWindow) return false;
+
+      if (!q) return true;
+
+      return this.spotCallsign(s).toLowerCase().includes(q)
+        || this.spotSummitRef(s).toLowerCase().includes(q)
+        || String(s.summitName || '').toLowerCase().includes(q)
+        || String(s.frequency || '').toLowerCase().includes(q)
+        || String(s.mode || '').toLowerCase().includes(q)
+        || String(s.postedBy || '').toLowerCase().includes(q);
+    });
+  }
+
+  alertRowClass(alert: SotaAlert): string {
+    return this.isAlertInHighlightWindow(alert) ? 'table-row--highlight' : '';
+  }
+
+  spotRowClass(spot: SotaSpot): string {
+    return this.isSpotFresh(spot) ? 'table-row--highlight' : '';
+  }
+
+  private isAlertInHighlightWindow(alert: SotaAlert): boolean {
+    const ts = this.alertTimeMs(alert);
+    if (ts === null) return false;
+    const deltaMs = Math.abs(Date.now() - ts);
+    return deltaMs <= this.ALERT_HIGHLIGHT_WINDOW_MINUTES * 60_000;
+  }
+
+  private isSpotFresh(spot: SotaSpot): boolean {
+    const ts = this.spotTimeMs(spot);
+    if (ts === null) return false;
+    const ageMs = Date.now() - ts;
+    return ageMs >= 0 && ageMs <= this.SPOT_HIGHLIGHT_WINDOW_MINUTES * 60_000;
+  }
+
+  private alertTimeMs(alert: SotaAlert): number | null {
+    const extended = alert as SotaAlert & { date_activated?: string; activationDate?: string };
+    return this.parseTimestampMs(extended.dateActivated ?? extended.date_activated ?? extended.activationDate ?? null);
+  }
+
+  private spotTimeMs(spot: SotaSpot): number | null {
+    return this.parseTimestampMs(spot.time ?? spot.timeStamp ?? null);
+  }
+
+  private parseTimestampMs(raw: unknown): number | null {
+    if (raw === null || raw === undefined) return null;
+
+    if (typeof raw === 'number') {
+      if (Number.isNaN(raw)) return null;
+      return raw > 1_000_000_000_000 ? raw : raw * 1000;
+    }
+
+    const value = String(raw).trim();
+    if (!value) return null;
+
+    const normalizedIso = value.replace(/(\.\d{3})\d+/, '$1').replace('Z', '+00:00');
+    const parsedIso = new Date(normalizedIso).getTime();
+    if (!Number.isNaN(parsedIso)) return parsedIso;
+
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) return null;
+    return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
   }
 }
