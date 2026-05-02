@@ -4,6 +4,8 @@
 - **File**: `template.yaml`
 - **Transform**: AWS::Serverless-2016-10-31
 - **Deploy**: `./deploy.sh` (wraps `sam deploy`)
+- **CORS error responses**: `WatchtowerWebApi` defines API Gateway `GatewayResponse` resources for `DEFAULT_4XX`, `DEFAULT_5XX`, `UNAUTHORIZED`, and `ACCESS_DENIED` so browser clients receive `Access-Control-Allow-*` headers even when requests fail before Lambda.
+- **Timeout/failure CORS**: `INTEGRATION_TIMEOUT` and `INTEGRATION_FAILURE` GatewayResponses are also configured with CORS headers for browser-visible timeout/failure responses.
 
 ## Lambda Functions Detail
 
@@ -41,10 +43,14 @@
 - **Trigger**: GET /alerts, GET /spots (Cognito auth)
 - **Runtime**: Python 3.12
 - **GetAlertsWebFunction**:
+  - Scans alerts, then enriches only referenced summits via DynamoDB `BatchGetItem` (avoids full `SummitsTable` scan)
   - Reads `SotaAlertsTable` and enriches with summit metadata from `SummitsTable`
   - Returns normalized/enriched alert rows for web table: `dateActivated`, `callsign`, `summitRef`, `summitName`, `altitude`, `points`, `frequenciesComments`, `notified`, etc.
 - **GetSpotsWebFunction**:
+  - Enriches only referenced summits via DynamoDB `BatchGetItem` (avoids full `SummitsTable` scan)
   - Fetches recent SOTA spots, filters by configured associations, enriches with `SummitsTable`
+  - Supports SOTA API key variants (`activatingCallsign`/`activatorCallsign`, `posterCallsign`/`callsign`)
+  - Falls back to parsing `summitDetails` when summit metadata lookup misses
   - Returns normalized spot rows: `time`, `callsign`, `frequency`, `mode`, `summitRef`, `summitName`, `altitude`, `points`, `postedBy`, `comments`
 
 ### GetConfigFunction / PutConfigFunction

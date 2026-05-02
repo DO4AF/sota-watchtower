@@ -2,6 +2,8 @@ import json
 import boto3
 import requests
 import os
+import re
+from boto3.dynamodb.types import TypeDeserializer
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -10,6 +12,70 @@ CORS_HEADERS = {
 }
 
 DEFAULT_ASSOCIATIONS = ['DL', 'OE', 'DM']
+
+_DESERIALIZER = TypeDeserializer()
+
+
+def chunked(items, size):
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+
+def batch_get_summits_by_codes(dynamodb_client, table_name, summit_codes):
+    if not summit_codes:
+        return {}
+
+    unique_codes = sorted(set(code for code in summit_codes if code))
+    result = {}
+
+    for chunk in chunked(unique_codes, 100):
+        request_items = {
+            table_name: {
+                'Keys': [{'summitCode': {'S': code}} for code in chunk]
+            }
+        }
+
+        while request_items:
+            response = dynamodb_client.batch_get_item(RequestItems=request_items)
+            for raw_item in response.get('Responses', {}).get(table_name, []):
+                item = {k: _DESERIALIZER.deserialize(v) for k, v in raw_item.items()}
+                code = item.get('summitCode')
+                if code:
+                    result[code] = item
+            request_items = response.get('UnprocessedKeys', {})
+
+    return result
+
+
+def parse_summit_details(details):
+    """Parse SOTA API summitDetails like: 'Reisseck, 2305m, 10 points'."""
+    if not isinstance(details, str) or not details.strip():
+        return '', 0, 0
+
+    match = re.match(r'^\s*(?P<name>[^,]+),\s*(?P<alt>\d+)m,\s*(?P<pts>\d+)\s+points\s*$', details)
+    if not match:
+        return '', 0, 0
+
+    return (
+        match.group('name').strip(),
+        int(match.group('alt')),
+        int(match.group('pts')),
+    )
+
+
+def normalize_summit_ref(association_code, summit_code):
+    association = str(association_code or '').strip()
+    summit = str(summit_code or '').strip()
+
+    if '/' in summit:
+        left, right = summit.split('/', 1)
+        if left and not association:
+            association = left.strip()
+        summit = right.strip()
+
+    if not summit:
+        return ''
+    return f"{association}/{summit}".strip('/')
 
 
 def get_associations():
@@ -27,22 +93,8 @@ def get_associations():
 
 def handler(event, context):
     dynamodb = boto3.resource('dynamodb')
-    summits_table = dynamodb.Table(os.environ['SUMMITS_TABLE_NAME'])
-
-    summit_items = []
-    summit_scan_kwargs = {}
-    while True:
-        summit_resp = summits_table.scan(**summit_scan_kwargs)
-        summit_items.extend(summit_resp.get('Items', []))
-        if 'LastEvaluatedKey' not in summit_resp:
-            break
-        summit_scan_kwargs['ExclusiveStartKey'] = summit_resp['LastEvaluatedKey']
-
-    summit_by_code = {}
-    for summit in summit_items:
-        code = summit.get('summitCode')
-        if code:
-            summit_by_code[code] = summit
+    dynamodb_client = boto3.client('dynamodb')
+    summits_table_name = os.environ['SUMMITS_TABLE_NAME']
 
     associations = get_associations()
     response = requests.get('https://api2.sota.org.uk/api/spots/-60/all', timeout=10)
@@ -50,25 +102,56 @@ def handler(event, context):
     spots = response.json()
     filtered = [s for s in spots if s.get('associationCode') in associations]
 
+    summit_refs = []
+    for spot in filtered:
+        summit_refs.append(
+            normalize_summit_ref(
+                spot.get('associationCode', ''),
+                spot.get('summitCode', ''),
+            )
+        )
+
+    summit_by_code = batch_get_summits_by_codes(dynamodb_client, summits_table_name, summit_refs)
+
     normalized = []
     for spot in filtered:
-        summit_ref = f"{spot.get('associationCode', '')}/{spot.get('summitCode', '')}".strip('/')
+        summit_ref = normalize_summit_ref(
+            spot.get('associationCode', ''),
+            spot.get('summitCode', ''),
+        )
         summit = summit_by_code.get(summit_ref, {})
+
+        fallback_name, fallback_altitude, fallback_points = parse_summit_details(spot.get('summitDetails', ''))
+
+        time_value = str(
+            spot.get('timeStamp')
+            or spot.get('timestamp')
+            or spot.get('spotTime')
+            or ''
+        )
+        callsign_value = str(
+            spot.get('activatingCallsign')
+            or spot.get('activatorCallsign')
+            or spot.get('callsign')
+            or ''
+        )
+        posted_by_value = str(spot.get('posterCallsign') or spot.get('callsign') or '')
+
         normalized.append({
-            'time': spot.get('timeStamp', ''),
-            'callsign': spot.get('activatingCallsign', ''),
+            'time': time_value,
+            'callsign': callsign_value,
             'frequency': str(spot.get('frequency', '') or ''),
             'mode': str(spot.get('mode', '') or ''),
             'summitRef': summit_ref,
-            'summitName': summit.get('peakName', ''),
-            'altitude': int(summit.get('elevationM', 0) or 0),
-            'points': int(summit.get('points', 0) or 0),
-            'postedBy': spot.get('posterCallsign', ''),
+            'summitName': str(summit.get('peakName', '') or fallback_name),
+            'altitude': int(summit.get('elevationM', 0) or fallback_altitude),
+            'points': int(summit.get('points', 0) or fallback_points),
+            'postedBy': posted_by_value,
             'comments': spot.get('comments', spot.get('comment', '')),
             # Backward-compatible aliases
-            'activatorCallsign': spot.get('activatingCallsign', ''),
+            'activatorCallsign': callsign_value,
             'summitCode': summit_ref,
-            'timeStamp': spot.get('timeStamp', ''),
+            'timeStamp': time_value,
         })
 
     return {

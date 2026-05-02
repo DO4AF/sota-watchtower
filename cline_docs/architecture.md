@@ -113,10 +113,12 @@ ttl: Number (Unix epoch, 2 hours from write)
 ## Amplify Hosting
 - **App ID**: d1e96ec1sckzck
 - **Branch**: main
+- **Ownership model**: pre-existing Amplify app (not created by CloudFormation/SAM)
 - **Build**: Angular production build (ng build --configuration production)
 - **Root**: web/
 - **Auto-deploy**: On git push to main
 - **Env vars**: Set by deploy.sh via `aws amplify update-app`
+- **SPA rewrites**: enforced by deploy.sh custom rule (`regex -> /index.html`, HTTP 200) to prevent deep-link refresh 404s (e.g. `/alerts/`)
 
 ## CloudWatch Dashboard
 - **Name**: SOTA-Watchtower-Dashboard

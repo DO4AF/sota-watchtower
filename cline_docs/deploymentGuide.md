@@ -23,12 +23,46 @@ ADMIN_PASSWORD=<password>
 ./deploy.sh
 ```
 
-This script:
+## Delete Stack (safe S3 cleanup first)
+Use the helper script below instead of running `sam delete` directly. It empties all S3 buckets managed by the stack (including versioned objects and delete markers) before calling `sam delete`, which avoids `DELETE_FAILED` on bucket resources such as `SummitsBucket`.
+
+```bash
+./delete-stack.sh
+```
+
+Optional: pass additional `sam delete` arguments through to the script.
+
+```bash
+./delete-stack.sh --debug
+```
+
+`./deploy.sh` script behavior:
 1. Sources `.env` for sensitive parameters
 2. Runs `sam deploy` with parameter overrides
 3. Reads CloudFormation stack outputs (API URL, WS URL, Cognito IDs)
-4. Updates Amplify environment variables via `aws amplify update-app`
-5. Triggers Amplify rebuild via `aws amplify start-job`
+4. Validates the pre-existing Amplify app + branch from `samconfig.toml`
+5. Updates Amplify environment variables via `aws amplify update-app`
+6. Enforces SPA rewrite custom rule (`/*` style regex → `/index.html`, HTTP 200)
+7. Triggers Amplify rebuild via `aws amplify start-job`
+8. Runs route header checks for `/alerts`, `/alerts/`, `/map` on default Amplify domain
+9. (Optional) Runs same checks on custom domain if `CUSTOM_WEB_DOMAIN` is set in shell
+10. Invokes `RefreshSummitsFunction` asynchronously to populate `SummitsTable`
+11. Invokes `GetSotaAlertsFunction` asynchronously once to prefill `SotaAlertsTable`
+
+## Amplify Ownership Model
+- Amplify is **pre-existing** and is **not** created by `template.yaml` anymore.
+- `deploy.sh` manages env vars/rewrite/build for that existing app via:
+  - `samconfig.toml` → `[amplify].app_id`
+  - `samconfig.toml` → `[amplify].branch`
+- This avoids accidental deployment to an unused, stack-created Amplify app.
+
+## Optional Custom Domain Validation
+Set custom domain before running deploy (for route status checks in script output):
+
+```bash
+export CUSTOM_WEB_DOMAIN=watchtower.example.com
+./deploy.sh
+```
 
 ## Backend Only (SAM)
 ```bash

@@ -2,12 +2,15 @@ import json
 import boto3
 import os
 from decimal import Decimal
+from boto3.dynamodb.types import TypeDeserializer
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Authorization,Content-Type',
     'Content-Type': 'application/json',
 }
+
+_DESERIALIZER = TypeDeserializer()
 
 
 class DecimalEncoder(json.JSONEncoder):
@@ -17,25 +20,43 @@ class DecimalEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+def chunked(items, size):
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+
+def batch_get_summits_by_codes(dynamodb_client, table_name, summit_codes):
+    """Fetch only required summit records via BatchGetItem (100 key max/chunk)."""
+    if not summit_codes:
+        return {}
+
+    unique_codes = sorted(set(code for code in summit_codes if code))
+    result = {}
+
+    for chunk in chunked(unique_codes, 100):
+        request_items = {
+            table_name: {
+                'Keys': [{'summitCode': {'S': code}} for code in chunk]
+            }
+        }
+
+        while request_items:
+            response = dynamodb_client.batch_get_item(RequestItems=request_items)
+            for raw_item in response.get('Responses', {}).get(table_name, []):
+                item = {k: _DESERIALIZER.deserialize(v) for k, v in raw_item.items()}
+                code = item.get('summitCode')
+                if code:
+                    result[code] = item
+            request_items = response.get('UnprocessedKeys', {})
+
+    return result
+
+
 def handler(event, context):
     dynamodb = boto3.resource('dynamodb')
+    dynamodb_client = boto3.client('dynamodb')
     alerts_table = dynamodb.Table(os.environ['SOTAALERTSTABLE_TABLE_NAME'])
-    summits_table = dynamodb.Table(os.environ['SUMMITS_TABLE_NAME'])
-
-    summit_items = []
-    summit_scan_kwargs = {}
-    while True:
-        summit_resp = summits_table.scan(**summit_scan_kwargs)
-        summit_items.extend(summit_resp.get('Items', []))
-        if 'LastEvaluatedKey' not in summit_resp:
-            break
-        summit_scan_kwargs['ExclusiveStartKey'] = summit_resp['LastEvaluatedKey']
-
-    summit_by_code = {}
-    for summit in summit_items:
-        code = summit.get('summitCode')
-        if code:
-            summit_by_code[code] = summit
+    summits_table_name = os.environ['SUMMITS_TABLE_NAME']
 
     items = []
     scan_kwargs = {}
@@ -45,6 +66,9 @@ def handler(event, context):
         if 'LastEvaluatedKey' not in response:
             break
         scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+
+    summit_refs = [str(item.get('summit', '') or '') for item in items]
+    summit_by_code = batch_get_summits_by_codes(dynamodb_client, summits_table_name, summit_refs)
 
     normalized = []
     for item in items:

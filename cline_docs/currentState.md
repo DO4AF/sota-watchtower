@@ -18,6 +18,41 @@
 
 ## Recent Changes (2026-05-02)
 
+### Deployment/Hosting — Use pre-existing Amplify app only + SPA rewrite enforcement
+- Removed SAM-managed Amplify resources from `template.yaml` (`AmplifyApp`, `AmplifyMainBranch`) and removed `AmplifyAppId` output.
+- `deploy.sh` now explicitly validates the pre-existing Amplify app/branch from `samconfig.toml` before deployment sync.
+- `deploy.sh` now enforces Amplify SPA rewrite custom rules (`regex -> /index.html`, HTTP 200) on the real app to prevent deep-link refresh issues (e.g. `/alerts/` 404 after trailing-slash redirects).
+- `deploy.sh` now runs route header checks for `/alerts`, `/alerts/`, and `/map` on the default Amplify domain, and optionally on a custom domain when `CUSTOM_WEB_DOMAIN` is set.
+
+### Backend — Alerts/Spots summit ref normalization hardening
+- Added summit reference normalization in `GetSotaAlertsFunction` and `GetSpotsWebFunction` to avoid malformed refs when upstream `summitCode` already includes association (prevents values like `OE/OE/SB-462`).
+- `GetSotaAlertsFunction` now supports additional upstream callsign/time field variants while deduplicating alerts (`activatingCallsign` / `activatorCallsign` / `callsign`, `timeStamp` / `timestamp`).
+- `GetSpotsWebFunction` now uses normalized summit refs consistently for lookup/response and accepts additional time fallback (`spotTime`) while preserving current field compatibility.
+
+### Backend/Infra — API Gateway CORS error-response fix
+- Added API Gateway `GatewayResponse` resources for `WatchtowerWebApi` (`DEFAULT_4XX`, `DEFAULT_5XX`, `UNAUTHORIZED`, `ACCESS_DENIED`) in `template.yaml`.
+- All these API-level error responses now include CORS headers (`Access-Control-Allow-Origin`, `Access-Control-Allow-Headers`, `Access-Control-Allow-Methods`).
+- This fixes browser-side "CORS Missing Allow Origin" errors for `/alerts` and `/spots` when requests fail before Lambda (e.g. auth/authorizer/API Gateway 4xx/5xx).
+
+### Backend — Alerts/Spots timeout reduction + timeout-CORS coverage
+- **GetAlertsWebFunction performance optimization:** replaced full `SummitsTable` scan with targeted `BatchGetItem` enrichment for only summit refs used by active alerts.
+- **GetSpotsWebFunction performance optimization:** replaced full `SummitsTable` scan with targeted `BatchGetItem` enrichment for only summit refs present in filtered spots.
+- **Lambda timeout safety margin:** increased `GetAlertsWebFunction` and `GetSpotsWebFunction` timeouts from 30s to 60s.
+- **API Gateway timeout/failure CORS coverage:** added `GatewayResponse` resources for `INTEGRATION_TIMEOUT` and `INTEGRATION_FAILURE` so timeout/failure responses include CORS headers.
+
+### Backend — Alerts/Spots post-redeploy resilience fixes
+- **GetSpotsWebFunction SOTA API compatibility fix:** spots normalization now supports both old and new upstream field names (`activatingCallsign`/`activatorCallsign`, `posterCallsign`/`callsign`) so `Time (UTC)`, `Callsign`, and `Posted By` no longer render as empty dashes.
+- **Spots summit metadata fallback:** when `SummitsTable` lookup misses, `/spots` now parses upstream `summitDetails` (e.g. `"Reisseck, 2305m, 10 points"`) to still provide `summitName`, `altitude`, and `points`.
+- **GetSotaAlertsFunction hardening:** frequency regex creation is now fail-safe (invalid/missing pattern falls back to match-all), ISO timestamp comparisons are robust for trailing `Z`, and ingestion logs now report fetched/filtered/deleted/written counts.
+- **Automatic alerts refresh restored:** `GetSotaAlertsFunction` now has an EventBridge schedule (`rate(5 minutes)`) to repopulate `SotaAlertsTable` continuously after redeploy.
+- **Deploy bootstrap improved:** `deploy.sh` now invokes `GetSotaAlertsFunction` once after deployment, so alerts are prefilled immediately instead of waiting for the next schedule tick.
+- **Critical API 502 fix (`/alerts`, `/spots`):** both web Lambdas used low-level DynamoDB `batch_get_item` with incorrectly typed keys (`{'summitCode': 'OE/...'}` instead of `{'summitCode': {'S': 'OE/...'}}`), causing `ParamValidationError` and API Gateway `502 InternalServerErrorException`. Key serialization was corrected in both `GetAlertsWebFunction` and `GetSpotsWebFunction`.
+
+### Deployment — Safe stack deletion helper
+- Added root-level `delete-stack.sh` to safely tear down `sota-watchtower-stack` by first emptying all stack-managed S3 buckets (including versioned objects and delete markers), then running `sam delete --no-prompts`.
+- This prevents CloudFormation `DELETE_FAILED` on non-empty bucket resources (notably `SummitsBucket`) during stack removal.
+- Updated `cline_docs/deploymentGuide.md` with a dedicated “Delete Stack (safe S3 cleanup first)” section and usage examples.
+
 ### Backend — Summits validity + normalized web payloads
 - **RefreshSummitsFunction validity fix:** SOTA CSV `ValidFrom`/`ValidTo` is now parsed as `DD/MM/YYYY` dates before filtering. This fixes false positives where inactive summits could still appear on the map (e.g. expired summits such as Ulrichsberg).
 - **GetSotaAlertsFunction enrichment:** alert items persisted in `SotaAlertsTable` now additionally include `frequency`, `mode`, `comments`, and `posterCallsign`; `callsign` now prefers `activatingCallsign` (fallback: `posterCallsign`).

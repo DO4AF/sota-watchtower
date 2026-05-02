@@ -103,6 +103,12 @@ Resources:
       Tracing: Active
       Layers:
         - !Ref RequestsLayer
+      Events:
+        SotaAlertsRefresh:
+          Type: Schedule
+          Properties:
+            Schedule: rate(5 minutes)
+            Description: Refresh SOTA alerts table every 5 minutes
       Environment:
         Variables:
           FREQUENCY_FILTER_PATTERN: !Ref FrequencyFilterPattern
@@ -628,6 +634,66 @@ Resources:
           CognitoAuthorizer:
             UserPoolArn: !GetAtt WatchtowerUserPool.Arn
 
+  WatchtowerWebApiGatewayResponseDefault4xx:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref WatchtowerWebApi
+      ResponseType: DEFAULT_4XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+
+  WatchtowerWebApiGatewayResponseDefault5xx:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref WatchtowerWebApi
+      ResponseType: DEFAULT_5XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+
+  WatchtowerWebApiGatewayResponseUnauthorized:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref WatchtowerWebApi
+      ResponseType: UNAUTHORIZED
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+
+  WatchtowerWebApiGatewayResponseAccessDenied:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref WatchtowerWebApi
+      ResponseType: ACCESS_DENIED
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+
+  WatchtowerWebApiGatewayResponseIntegrationTimeout:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref WatchtowerWebApi
+      ResponseType: INTEGRATION_TIMEOUT
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+
+  WatchtowerWebApiGatewayResponseIntegrationFailure:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref WatchtowerWebApi
+      ResponseType: INTEGRATION_FAILURE
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+
   GetAprsPositionsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -768,7 +834,7 @@ Resources:
       Handler: handler.handler
       Runtime: python3.13
       MemorySize: 512
-      Timeout: 30
+      Timeout: 60
       Tracing: Active
       Events:
         GetAlerts:
@@ -801,7 +867,7 @@ Resources:
       Handler: handler.handler
       Runtime: python3.13
       MemorySize: 512
-      Timeout: 30
+      Timeout: 60
       Tracing: Active
       Layers:
         - !Ref RequestsLayer
@@ -1081,52 +1147,6 @@ Resources:
       AdminEmail: !Ref AdminEmail
       AdminPassword: !Ref AdminPassword
 
-  # ─── Web UI: Amplify Hosting ─────────────────────────────────────────────────
-  AmplifyApp:
-    Type: AWS::Amplify::App
-    Properties:
-      Name: sota-watchtower-web
-      Description: SOTA Watchtower Web Interface
-      BuildSpec: |
-        version: 1
-        frontend:
-          phases:
-            preBuild:
-              commands:
-                - cd web && npm ci
-            build:
-              commands:
-                - npx ng build --configuration production
-          artifacts:
-            baseDirectory: web/dist/sota-watchtower-web/browser
-            files:
-              - '**/*'
-          cache:
-            paths:
-              - 'web/node_modules/**/*'
-      CustomRules:
-        - Source: </^((?!\.(css|gif|ico|jpg|js|png|txt|svg|woff|ttf|map|json)$).)*$/
-          Target: /index.html
-          Status: '200'
-      EnvironmentVariables:
-        - Name: ANGULAR_API_BASE_URL
-          Value: !Sub https://${WatchtowerWebApi}.execute-api.${AWS::Region}.amazonaws.com/Prod
-        - Name: ANGULAR_WS_URL
-          Value: !Sub wss://${WatchtowerWsApi}.execute-api.${AWS::Region}.amazonaws.com/Prod
-        - Name: ANGULAR_COGNITO_USER_POOL_ID
-          Value: !Ref WatchtowerUserPool
-        - Name: ANGULAR_COGNITO_CLIENT_ID
-          Value: !Ref WatchtowerUserPoolClient
-        - Name: ANGULAR_REGION
-          Value: !Ref AWS::Region
-
-  AmplifyMainBranch:
-    Type: AWS::Amplify::Branch
-    Properties:
-      AppId: !GetAtt AmplifyApp.AppId
-      BranchName: main
-      EnableAutoBuild: false
-
 Outputs:
   ApiGatewayInvokeUrl:
     Description: URL to enter into HamAlert Destination
@@ -1156,11 +1176,6 @@ Outputs:
     Value: !Ref WatchtowerUserPoolClient
     Export:
       Name: !Sub ${AWS::StackName}-CognitoClientId
-  AmplifyAppId:
-    Description: Amplify App ID (connect your GitHub repo here)
-    Value: !GetAtt AmplifyApp.AppId
-    Export:
-      Name: !Sub ${AWS::StackName}-AmplifyAppId
   DashboardUrlExport:
     Description: URL to the CloudWatch Dashboard (export)
     Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards/dashboard/${SotaWatchtowerDashboard}
