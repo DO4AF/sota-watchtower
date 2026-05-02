@@ -18,6 +18,22 @@
 
 ## Recent Changes (2026-05-02)
 
+### Frontend — Tactical View + Upcoming Alerts panel on Map
+- Added a new **Tactical View toggle** in the map toolbar (Standard/Tactical) with an **Auto-fit tactical** action.
+- Added **Tactical source filter chips** (`Alerts`, `Recent spots`, `Candidates`) so users can quickly declutter tactical context.
+- Tactical mode now renders only **relevant summits** (summits with active alerts, recent spots within **60 minutes**, or candidate proximity hits).
+- Added tactical **airline links** between activator and associated summit:
+  - Alerts: solid orange line
+  - Candidates: dashed cyan line
+  - Recent spots: dotted purple line
+- Tactical lines now support **freshness-based fading** (newer data = higher opacity).
+- Added a dedicated **Upcoming Alerts (all active)** panel on the right overlay:
+  - includes alerts even when APRS position is missing
+  - rows without APRS show a **gray progress bar** and `No APRS` status
+  - clicking no-APRS rows centers the summit; APRS rows center the activator
+- Existing **Approaching (<2 km)** panel remains proximity-only for signal clarity.
+- Required frontend validation run: `cd web && npx ng build --configuration production` ✅ (known warnings only: SCSS budget + Leaflet CommonJS).
+
 ### Deployment/Hosting — Use pre-existing Amplify app only + SPA rewrite enforcement
 - Removed SAM-managed Amplify resources from `template.yaml` (`AmplifyApp`, `AmplifyMainBranch`) and removed `AmplifyAppId` output.
 - `deploy.sh` now explicitly validates the pre-existing Amplify app/branch from `samconfig.toml` before deployment sync.

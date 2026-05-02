@@ -54,6 +54,25 @@
   gap: 12px;
 }
 
+.tactical-toggle {
+  border: 1px solid var(--p-surface-600);
+  background: var(--p-surface-800);
+  color: var(--p-text-color);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.76rem;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--p-primary-color);
+  }
+}
+
+.tactical-toggle--active {
+  background: color-mix(in srgb, var(--p-primary-color) 20%, var(--p-surface-800));
+  border-color: var(--p-primary-color);
+}
+
 .trace-control {
   display: flex;
   align-items: center;
@@ -115,10 +134,26 @@
     width: min(360px, calc(100% - 20px));
     overflow: hidden;
 
+    .panel--tactical-filters {
+      flex: 0 0 auto;
+    }
+
     .panel--approaching {
-      flex: 0 1 auto;
+      flex: 0 1 22%;
       min-height: 0;
-      max-height: calc((100% - 10px) / 3);
+      max-height: 30%;
+      display: flex;
+      flex-direction: column;
+
+      .proximity-list {
+        flex: 1 1 auto;
+        max-height: none;
+      }
+    }
+
+    .panel--upcoming-alerts {
+      flex: 1 1 36%;
+      min-height: 0;
       display: flex;
       flex-direction: column;
 
@@ -129,7 +164,7 @@
     }
 
     .panel--candidates {
-      flex: 1 1 0;
+      flex: 1 1 42%;
       min-height: 0;
       display: flex;
       flex-direction: column;
@@ -266,6 +301,32 @@
   vertical-align: baseline;
 }
 
+.chip-row {
+  display: flex;
+  gap: 6px;
+}
+
+.chip {
+  border: 1px solid var(--p-surface-600);
+  background: var(--p-surface-800);
+  color: var(--p-text-muted-color);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--p-primary-color);
+    color: var(--p-text-color);
+  }
+
+  &--active {
+    color: var(--p-text-color);
+    border-color: var(--p-primary-color);
+    background: color-mix(in srgb, var(--p-primary-color) 20%, var(--p-surface-800));
+  }
+}
+
 .proximity-list {
   display: flex;
   flex-direction: column;
@@ -306,6 +367,11 @@
     color: var(--p-text-muted-color);
     white-space: nowrap;
     margin-left: auto;
+
+    &--no-aprs {
+      color: #9e9e9e;
+      font-weight: 600;
+    }
   }
 
   &__summit {
@@ -330,9 +396,20 @@
     border-radius: inherit;
     background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
 
+    &--no-aprs {
+      background: linear-gradient(90deg, #666, #9e9e9e);
+    }
+
     &--candidate {
       background: linear-gradient(90deg, #64748b, #38bdf8, #22c55e);
     }
+  }
+
+  &__status {
+    margin-top: 5px;
+    font-size: 0.68rem;
+    color: var(--p-text-muted-color);
+    text-transform: uppercase;
   }
 }
 
@@ -446,4 +523,26 @@
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.legend-line {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top: 2px solid;
+  flex-shrink: 0;
+
+  &--alert {
+    border-color: #ff9800;
+  }
+
+  &--candidate {
+    border-color: #38bdf8;
+    border-top-style: dashed;
+  }
+
+  &--spot {
+    border-color: #c084fc;
+    border-top-style: dotted;
+  }
 }

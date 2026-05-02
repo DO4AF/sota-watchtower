@@ -71,7 +71,13 @@ The app uses a **left sidebar** layout:
 - **Notified markers**: Green glow circle
 - **Walker traces**: Polylines showing historical positions (configurable hours)
 - **Quick Search overlay**: live summit/activator suggestions while typing; selecting a suggestion centers/zooms map
-- **Approaching panels**: right-side overlay sections for alerted activators (<2 km to alerted summit) and APRS-active candidates without alert (<2 km to nearest summit), including distance progress bars
+- **Approaching panel**: right-side section for alerted activators with APRS within `<2 km` to alerted summit (proximity-focused)
+- **Upcoming Alerts panel**: right-side section listing all active alerts (including alerts with no APRS); no-APRS entries show a gray/disabled progress bar
+- **Candidates panel**: right-side section for APRS-active activators without alert within `<2 km` to nearest summit
+- **Tactical mode**: toolbar toggle (Standard/Tactical) to reduce map to relevant summits only (alerted summits, recent-spotted summits, candidate-target summits)
+- **Tactical lines**: activator→summit association lines with source styles (alert=solid, candidate=dashed, spot=dotted) and age-based opacity fade
+- **Tactical source chips**: quick include/exclude of `Alerts`, `Recent spots` (60 min window), and `Candidates`
+- **Auto-fit tactical**: one-click fit-to-bounds for tactical summits and active tactical lines
 - **Debug log panel**: Toggleable side panel showing events
 - Callsign country flags are shown (when resolvable) in activator-related UI text.
 - Refreshes APRS positions every 60 seconds

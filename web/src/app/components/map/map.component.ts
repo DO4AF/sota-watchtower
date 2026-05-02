@@ -12,7 +12,7 @@ import { LeafletModule } from '@bluehalo/ngx-leaflet';
 import * as L from 'leaflet';
 import { forkJoin, interval, Subscription } from 'rxjs';
 import { catchError, of } from 'rxjs';
-import { ApiService, AprsPosition } from '../../services/api.service';
+import { ApiService, AprsPosition, SotaSpot } from '../../services/api.service';
 import { WebSocketService } from '../../services/websocket.service';
 import { EventLogService } from '../../services/event-log.service';
 import { environment } from '../../../environments/environment';
@@ -144,10 +144,32 @@ interface ProximityEntry {
   callsign: string;
   summitCode: string;
   summitName: string;
-  distanceKm: number;
-  progressPct: number;
-  activatorLat: number;
-  activatorLon: number;
+  summitLat: number;
+  summitLon: number;
+  distanceKm: number | null;
+  progressPct: number | null;
+  hasAprs: boolean;
+  activatorLat: number | null;
+  activatorLon: number | null;
+  ageMin: number | null;
+}
+
+interface TacticalLineEntry {
+  source: 'alert' | 'candidate' | 'spot';
+  callsign: string;
+  summitCode: string;
+  fromLat: number;
+  fromLon: number;
+  toLat: number;
+  toLon: number;
+  ageMin: number;
+}
+
+interface RecentSpotLink {
+  callsign: string;
+  baseCallsign: string;
+  summitCode: string;
+  ageMin: number;
 }
 
 // ─── Viewport pan/zoom debounce ───────────────────────────────────────────────
@@ -181,13 +203,17 @@ export class MapComponent implements OnInit, OnDestroy {
   private glowLayer      = L.layerGroup();   // alert glow rings (behind summits)
   private summitLayer    = L.layerGroup();   // active CircleMarkers
   private activatorLayer = L.layerGroup();
+  private tacticalLineLayer = L.layerGroup();
   private labelLayer     = L.layerGroup();   // zoom-dependent summit labels
 
   private activators     = new Map<string, ActivatorState>();
   private aprsByBaseCallsign = new Map<string, AprsPosition>();
   private activeAlerts: ActiveAlert[] = [];
   private activeAlertBaseCallsigns = new Set<string>();
+  private recentSpotSummits = new Set<string>();
+  private recentSpotLinks: RecentSpotLink[] = [];
   private summitByCode = new Map<string, SummitRecord>();
+  private tacticalLines: TacticalLineEntry[] = [];
 
   /**
    * All summit data received from the API, held in memory.
@@ -216,11 +242,17 @@ export class MapComponent implements OnInit, OnDestroy {
   readonly traceDurationHours = signal(2);
   readonly searchSuggestions  = signal<SearchSuggestion[]>([]);
   readonly alertedApproaching = signal<ProximityEntry[]>([]);
+  readonly upcomingAlerts = signal<ProximityEntry[]>([]);
   readonly candidatesApproaching = signal<ProximityEntry[]>([]);
+  readonly tacticalMode = signal(false);
+  readonly tacticalSourceAlerts = signal(true);
+  readonly tacticalSourceSpots = signal(true);
+  readonly tacticalSourceCandidates = signal(true);
 
   searchQuery = '';
 
   readonly APPROACHING_DISTANCE_KM = 2;
+  readonly RECENT_SPOT_WINDOW_MINUTES = 60;
 
   readonly LABEL_ZOOM = 12;
 
@@ -298,12 +330,16 @@ export class MapComponent implements OnInit, OnDestroy {
     // Layer order: glow behind summits, activators on top, labels always topmost
     this.glowLayer.addTo(map);
     this.summitLayer.addTo(map);
+    this.tacticalLineLayer.addTo(map);
     this.activatorLayer.addTo(map);
     this.labelLayer.addTo(map);
     this.applyTiles();
     this.loadSummits();
     this.loadActivators();
-    this.refreshSub = interval(60_000).subscribe(() => this.loadActivators());
+    this.refreshSub = interval(60_000).subscribe(() => {
+      this.loadActivators();
+      this.refreshDynamicContext();
+    });
     this.ws.connect();
     this.wsSub = this.ws.messages$.subscribe(msg =>
       this.eventLog.info('WebSocket', JSON.stringify(msg))
@@ -330,9 +366,10 @@ export class MapComponent implements OnInit, OnDestroy {
   // ─── Summits + alert glow ────────────────────────────────────────────────
 
   private loadSummits(): void {
-    // Fetch alerts (failures are tolerated — alerts are optional glow rings)
+    // Fetch alerts/spots (failures are tolerated — summits should still render)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const alerts$ = this.api.getAlerts().pipe(catchError(() => of([] as any[])));
+    const spots$ = this.api.getSpots().pipe(catchError(() => of([] as SotaSpot[])));
 
     // Fetch summit GeoJSON: use S3 static file if env is set, else Lambda API
     const summitsUrl = (environment as { summitsUrl?: string }).summitsUrl ?? '';
@@ -353,57 +390,10 @@ export class MapComponent implements OnInit, OnDestroy {
     forkJoin({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       alerts: alerts$ as any,
+      spots: spots$,
     }).subscribe({
-      next: ({ alerts }) => {
-        // Build the set of currently active alerts
-        const now       = Date.now();
-        this.todayPlannedSummits.clear();
-        this.activeAlerts = [];
-        this.activeAlertBaseCallsigns.clear();
-
-        const todayUtc = new Date().toISOString().slice(0, 10);
-        const alertDateKey = (alert: Record<string, unknown>): string | null => {
-          const rawDate = String(alert['dateActivated'] ?? alert['date_activated'] ?? alert['activationDate'] ?? '');
-          if (!rawDate) return null;
-          const isoMatch = rawDate.match(/^(\d{4}-\d{2}-\d{2})/);
-          if (isoMatch) return isoMatch[1];
-          const ts = new Date(rawDate).getTime();
-          if (Number.isNaN(ts)) return null;
-          return new Date(ts).toISOString().slice(0, 10);
-        };
-
-        const isActiveAlert = (alert: Record<string, unknown>): boolean => {
-          const expiration = Number(alert['expiration']);
-          if (!Number.isNaN(expiration) && expiration > 0) {
-            // DynamoDB TTL values are in seconds
-            return expiration * 1000 > now;
-          }
-
-          const rawDate = String(alert['dateActivated'] ?? alert['date_activated'] ?? alert['activationDate'] ?? '');
-          if (!rawDate) return true;
-          const ts = new Date(rawDate).getTime();
-          if (Number.isNaN(ts)) return true;
-          // Keep a small grace period for slightly delayed data
-          return ts >= now - 6 * 3_600_000;
-        };
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (alerts as any[]).forEach(a => {
-          if (!isActiveAlert(a as Record<string, unknown>)) return;
-          const code = String(a.summit ?? a.summitCode ?? '');
-          const callsign = String(a.callsign ?? a.activatorCallsign ?? '');
-          const alertDate = alertDateKey(a as Record<string, unknown>);
-          if (code && alertDate === todayUtc) this.todayPlannedSummits.add(code);
-          if (callsign && code) {
-            const active = {
-              callsign,
-              baseCallsign: this.normalizeCallsign(callsign),
-              summit: code,
-            };
-            this.activeAlerts.push(active);
-            this.activeAlertBaseCallsigns.add(active.baseCallsign);
-          }
-        });
+      next: ({ alerts, spots }) => {
+        this.applyDynamicContextFromApi(alerts as Record<string, unknown>[], spots as SotaSpot[]);
 
         // Refresh activator icons so alert badges reflect latest alert set immediately.
         this.loadActivators();
@@ -451,6 +441,7 @@ export class MapComponent implements OnInit, OnDestroy {
         this.todayPlannedSummits.clear();
         this.activeAlerts = [];
         this.activeAlertBaseCallsigns.clear();
+        this.recentSpotSummits.clear();
         loadGeojson().then(geojson => {
           this.allSummits = [];
           geojson.features.forEach(f => {
@@ -486,6 +477,96 @@ export class MapComponent implements OnInit, OnDestroy {
     });
   }
 
+  private refreshDynamicContext(): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const alerts$ = this.api.getAlerts().pipe(catchError(() => of([] as any[])));
+    const spots$ = this.api.getSpots().pipe(catchError(() => of([] as SotaSpot[])));
+
+    forkJoin({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      alerts: alerts$ as any,
+      spots: spots$,
+    }).subscribe({
+      next: ({ alerts, spots }) => {
+        this.applyDynamicContextFromApi(alerts as Record<string, unknown>[], spots as SotaSpot[]);
+        this.recomputeProximityPanels();
+        this.updateViewport();
+      },
+      error: () => {
+        this.eventLog.warn('Map', 'Dynamic alert/spot refresh failed');
+      },
+    });
+  }
+
+  private applyDynamicContextFromApi(alerts: Record<string, unknown>[], spots: SotaSpot[]): void {
+    const now = Date.now();
+    this.todayPlannedSummits.clear();
+    this.activeAlerts = [];
+    this.activeAlertBaseCallsigns.clear();
+    this.recentSpotSummits.clear();
+    this.recentSpotLinks = [];
+
+    const todayUtc = new Date().toISOString().slice(0, 10);
+
+    const alertDateKey = (alert: Record<string, unknown>): string | null => {
+      const rawDate = String(alert['dateActivated'] ?? alert['date_activated'] ?? alert['activationDate'] ?? '');
+      if (!rawDate) return null;
+      const isoMatch = rawDate.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (isoMatch) return isoMatch[1];
+      const ts = new Date(rawDate).getTime();
+      if (Number.isNaN(ts)) return null;
+      return new Date(ts).toISOString().slice(0, 10);
+    };
+
+    const isActiveAlert = (alert: Record<string, unknown>): boolean => {
+      const expiration = Number(alert['expiration']);
+      if (!Number.isNaN(expiration) && expiration > 0) {
+        return expiration * 1000 > now;
+      }
+
+      const rawDate = String(alert['dateActivated'] ?? alert['date_activated'] ?? alert['activationDate'] ?? '');
+      if (!rawDate) return true;
+      const ts = new Date(rawDate).getTime();
+      if (Number.isNaN(ts)) return true;
+      return ts >= now - 6 * 3_600_000;
+    };
+
+    alerts.forEach(a => {
+      if (!isActiveAlert(a)) return;
+      const code = String(a['summit'] ?? a['summitCode'] ?? a['summitRef'] ?? '');
+      const callsign = String(a['callsign'] ?? a['activatorCallsign'] ?? '');
+      const alertDate = alertDateKey(a);
+      if (code && alertDate === todayUtc) this.todayPlannedSummits.add(code);
+      if (callsign && code) {
+        const active = {
+          callsign,
+          baseCallsign: this.normalizeCallsign(callsign),
+          summit: code,
+        };
+        this.activeAlerts.push(active);
+        this.activeAlertBaseCallsigns.add(active.baseCallsign);
+      }
+    });
+
+    const recentCutoff = now - this.RECENT_SPOT_WINDOW_MINUTES * 60_000;
+    spots.forEach(spot => {
+      const summitRef = String(spot.summitRef ?? spot.summitCode ?? '').trim();
+      if (!summitRef) return;
+      const ts = this.parseSpotTime(spot);
+      if (!ts || ts < recentCutoff) return;
+      this.recentSpotSummits.add(summitRef);
+
+      const callsign = String(spot.callsign ?? spot.activatorCallsign ?? '').trim();
+      if (!callsign) return;
+      this.recentSpotLinks.push({
+        callsign,
+        baseCallsign: this.normalizeCallsign(callsign),
+        summitCode: summitRef,
+        ageMin: (now - ts) / 60_000,
+      });
+    });
+  }
+
   // ─── Viewport-based marker management ───────────────────────────────────
 
   /**
@@ -507,11 +588,16 @@ export class MapComponent implements OnInit, OnDestroy {
 
     const bounds = this.map.getBounds().pad(VIEWPORT_PAD);
     const zoom   = this.map.getZoom();
+    const relevantCodes = this.computeRelevantSummitCodes();
+
+    this.renderTacticalLines(bounds);
 
     // --- Remove markers that have scrolled out of the padded bounds ---
     const toRemove: string[] = [];
     this.renderedMarkers.forEach(([m, glow], code) => {
-      if (!bounds.contains(m.getLatLng())) {
+      const outOfBounds = !bounds.contains(m.getLatLng());
+      const hiddenInTactical = this.tacticalMode() && !relevantCodes.has(code);
+      if (outOfBounds || hiddenInTactical) {
         this.summitLayer.removeLayer(m);
         if (glow) this.glowLayer.removeLayer(glow);
         toRemove.push(code);
@@ -523,6 +609,7 @@ export class MapComponent implements OnInit, OnDestroy {
     this.allSummits.forEach(s => {
       if (this.renderedMarkers.has(s.code)) return;
       if (!bounds.contains([s.lat, s.lon])) return;
+      if (this.tacticalMode() && !relevantCodes.has(s.code)) return;
 
       const latlng: L.LatLngExpression = [s.lat, s.lon];
 
@@ -734,7 +821,47 @@ export class MapComponent implements OnInit, OnDestroy {
   }
 
   focusProximity(entry: ProximityEntry): void {
-    this.focusMap(entry.activatorLat, entry.activatorLon, 14);
+    if (entry.hasAprs && entry.activatorLat !== null && entry.activatorLon !== null) {
+      this.focusMap(entry.activatorLat, entry.activatorLon, 14);
+      return;
+    }
+    this.focusMap(entry.summitLat, entry.summitLon, 14);
+  }
+
+  hasDistance(entry: ProximityEntry): boolean {
+    return entry.distanceKm !== null;
+  }
+
+  progressWidth(entry: ProximityEntry): number {
+    return entry.progressPct ?? 100;
+  }
+
+  proximityStatus(entry: ProximityEntry): string {
+    if (!entry.hasAprs) return 'No APRS';
+    if (entry.ageMin === null) return 'APRS';
+    if (entry.ageMin < 5) return 'Live';
+    if (entry.ageMin < 15) return 'Fresh';
+    if (entry.ageMin < 30) return 'Aging';
+    return 'Stale';
+  }
+
+  toggleTacticalMode(): void {
+    this.tacticalMode.update(v => !v);
+    this.updateViewport();
+  }
+
+  toggleTacticalSource(source: 'alerts' | 'spots' | 'candidates'): void {
+    if (source === 'alerts') this.tacticalSourceAlerts.update(v => !v);
+    if (source === 'spots') this.tacticalSourceSpots.update(v => !v);
+    if (source === 'candidates') this.tacticalSourceCandidates.update(v => !v);
+    this.updateViewport();
+  }
+
+  autoFitTactical(): void {
+    if (!this.map) return;
+    const bounds = this.getTacticalBounds();
+    if (!bounds) return;
+    this.map.fitBounds(bounds.pad(0.15), { animate: true, maxZoom: 13 });
   }
 
   private updateSearchSuggestions(): void {
@@ -777,44 +904,110 @@ export class MapComponent implements OnInit, OnDestroy {
   private recomputeProximityPanels(): void {
     if (!this.allSummits.length) {
       this.alertedApproaching.set([]);
+      this.upcomingAlerts.set([]);
       this.candidatesApproaching.set([]);
+      this.tacticalLines = [];
+      this.tacticalLineLayer.clearLayers();
       return;
     }
 
     const alertedEntries: ProximityEntry[] = [];
+    const upcomingEntries: ProximityEntry[] = [];
     const seenKeys = new Set<string>();
+    const now = Date.now();
+    const spotTacticalLines: TacticalLineEntry[] = [];
 
     this.activeAlerts.forEach(alert => {
       const summit = this.summitByCode.get(alert.summit);
-      const aprs = this.aprsByBaseCallsign.get(alert.baseCallsign);
-      if (!summit || !aprs) return;
-
-      const activatorLat = parseFloat(aprs.latitude);
-      const activatorLon = parseFloat(aprs.longitude);
-      if (Number.isNaN(activatorLat) || Number.isNaN(activatorLon)) return;
-
-      const distanceKm = this.haversineKm(activatorLat, activatorLon, summit.lat, summit.lon);
-      if (distanceKm >= this.APPROACHING_DISTANCE_KM) return;
+      if (!summit) return;
 
       const key = `${alert.baseCallsign}:${summit.code}`;
       if (seenKeys.has(key)) return;
       seenKeys.add(key);
 
-      alertedEntries.push({
+      const aprs = this.aprsByBaseCallsign.get(alert.baseCallsign);
+      if (!aprs) {
+        upcomingEntries.push({
+          callsign: alert.callsign,
+          summitCode: summit.code,
+          summitName: summit.name,
+          summitLat: summit.lat,
+          summitLon: summit.lon,
+          distanceKm: null,
+          progressPct: null,
+          hasAprs: false,
+          activatorLat: null,
+          activatorLon: null,
+          ageMin: null,
+        });
+        return;
+      }
+
+      const activatorLat = parseFloat(aprs.latitude);
+      const activatorLon = parseFloat(aprs.longitude);
+      if (Number.isNaN(activatorLat) || Number.isNaN(activatorLon)) {
+        upcomingEntries.push({
+          callsign: aprs.callsign,
+          summitCode: summit.code,
+          summitName: summit.name,
+          summitLat: summit.lat,
+          summitLon: summit.lon,
+          distanceKm: null,
+          progressPct: null,
+          hasAprs: false,
+          activatorLat: null,
+          activatorLon: null,
+          ageMin: null,
+        });
+        return;
+      }
+
+      const distanceKm = this.haversineKm(activatorLat, activatorLon, summit.lat, summit.lon);
+      const ageMin = (now - parseTimestamp(aprs.lastSeen).getTime()) / 60_000;
+
+      const upcomingEntry: ProximityEntry = {
         callsign: aprs.callsign,
         summitCode: summit.code,
         summitName: summit.name,
+        summitLat: summit.lat,
+        summitLon: summit.lon,
         distanceKm,
         progressPct: this.proximityPercent(distanceKm),
+        hasAprs: true,
         activatorLat,
         activatorLon,
-      });
+        ageMin,
+      };
+
+      upcomingEntries.push(upcomingEntry);
+
+      if (distanceKm < this.APPROACHING_DISTANCE_KM) alertedEntries.push(upcomingEntry);
     });
 
-    alertedEntries.sort((a, b) => a.distanceKm - b.distanceKm);
+    alertedEntries.sort((a, b) => (a.distanceKm ?? Number.POSITIVE_INFINITY) - (b.distanceKm ?? Number.POSITIVE_INFINITY));
+
+    upcomingEntries.sort((a, b) => {
+      if (a.hasAprs !== b.hasAprs) return a.hasAprs ? -1 : 1;
+      return (a.distanceKm ?? Number.POSITIVE_INFINITY) - (b.distanceKm ?? Number.POSITIVE_INFINITY);
+    });
 
     const alertedBases = new Set(this.activeAlerts.map(a => a.baseCallsign));
     const candidateEntries: ProximityEntry[] = [];
+    const tacticalLines: TacticalLineEntry[] = [];
+
+    upcomingEntries.forEach(entry => {
+      if (!entry.hasAprs || entry.activatorLat === null || entry.activatorLon === null || entry.ageMin === null) return;
+      tacticalLines.push({
+        source: 'alert',
+        callsign: entry.callsign,
+        summitCode: entry.summitCode,
+        fromLat: entry.activatorLat,
+        fromLon: entry.activatorLon,
+        toLat: entry.summitLat,
+        toLon: entry.summitLon,
+        ageMin: entry.ageMin,
+      });
+    });
 
     this.aprsByBaseCallsign.forEach(aprs => {
       const base = this.normalizeCallsign(aprs.callsign);
@@ -837,25 +1030,164 @@ export class MapComponent implements OnInit, OnDestroy {
 
       if (!nearest || nearestKm >= this.APPROACHING_DISTANCE_KM) return;
 
-      candidateEntries.push({
+      const ageMin = (now - parseTimestamp(aprs.lastSeen).getTime()) / 60_000;
+      const entry: ProximityEntry = {
         callsign: aprs.callsign,
         summitCode: nearest.code,
         summitName: nearest.name,
+        summitLat: nearest.lat,
+        summitLon: nearest.lon,
         distanceKm: nearestKm,
         progressPct: this.proximityPercent(nearestKm),
+        hasAprs: true,
         activatorLat,
         activatorLon,
+        ageMin,
+      };
+      candidateEntries.push(entry);
+      tacticalLines.push({
+        source: 'candidate',
+        callsign: entry.callsign,
+        summitCode: entry.summitCode,
+        fromLat: activatorLat,
+        fromLon: activatorLon,
+        toLat: nearest.lat,
+        toLon: nearest.lon,
+        ageMin,
       });
     });
 
-    candidateEntries.sort((a, b) => a.distanceKm - b.distanceKm);
+    this.recentSpotLinks.forEach(link => {
+      const summit = this.summitByCode.get(link.summitCode);
+      if (!summit) return;
+      const aprs = this.aprsByBaseCallsign.get(link.baseCallsign);
+      if (!aprs) return;
+      const fromLat = parseFloat(aprs.latitude);
+      const fromLon = parseFloat(aprs.longitude);
+      if (Number.isNaN(fromLat) || Number.isNaN(fromLon)) return;
+      spotTacticalLines.push({
+        source: 'spot',
+        callsign: aprs.callsign,
+        summitCode: summit.code,
+        fromLat,
+        fromLon,
+        toLat: summit.lat,
+        toLon: summit.lon,
+        ageMin: Math.min(link.ageMin, (now - parseTimestamp(aprs.lastSeen).getTime()) / 60_000),
+      });
+    });
+
+    candidateEntries.sort((a, b) => (a.distanceKm ?? Number.POSITIVE_INFINITY) - (b.distanceKm ?? Number.POSITIVE_INFINITY));
     this.alertedApproaching.set(alertedEntries);
+    this.upcomingAlerts.set(upcomingEntries);
     this.candidatesApproaching.set(candidateEntries);
+    this.tacticalLines = [...tacticalLines, ...spotTacticalLines];
+    this.renderTacticalLines(this.map.getBounds().pad(VIEWPORT_PAD));
   }
 
   private proximityPercent(distanceKm: number): number {
     const ratio = 1 - distanceKm / this.APPROACHING_DISTANCE_KM;
     return Math.max(0, Math.min(100, ratio * 100));
+  }
+
+  private parseSpotTime(spot: SotaSpot): number | null {
+    const raw = String(spot.time ?? spot.timeStamp ?? '').trim();
+    if (!raw) return null;
+    const ts = new Date(raw).getTime();
+    if (!Number.isNaN(ts)) return ts;
+    const numeric = Number(raw);
+    if (Number.isNaN(numeric)) return null;
+    return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+  }
+
+  private isTacticalSourceEnabled(source: 'alert' | 'candidate' | 'spot'): boolean {
+    if (source === 'alert') return this.tacticalSourceAlerts();
+    if (source === 'candidate') return this.tacticalSourceCandidates();
+    return this.tacticalSourceSpots();
+  }
+
+  private computeRelevantSummitCodes(): Set<string> {
+    if (!this.tacticalMode()) {
+      return new Set(this.allSummits.map(s => s.code));
+    }
+
+    const relevant = new Set<string>();
+
+    if (this.tacticalSourceAlerts()) {
+      this.activeAlerts.forEach(a => relevant.add(a.summit));
+    }
+    if (this.tacticalSourceSpots()) {
+      this.recentSpotSummits.forEach(code => relevant.add(code));
+    }
+    if (this.tacticalSourceCandidates()) {
+      this.candidatesApproaching().forEach(entry => relevant.add(entry.summitCode));
+    }
+
+    return relevant;
+  }
+
+  private renderTacticalLines(bounds: L.LatLngBounds): void {
+    this.tacticalLineLayer.clearLayers();
+    if (!this.tacticalMode()) return;
+
+    this.tacticalLines.forEach(line => {
+      if (!this.isTacticalSourceEnabled(line.source)) return;
+      const from = L.latLng(line.fromLat, line.fromLon);
+      const to = L.latLng(line.toLat, line.toLon);
+      if (!bounds.contains(from) && !bounds.contains(to)) return;
+
+      const opacity = this.lineOpacityForAge(line.ageMin);
+      const path = L.polyline([from, to], {
+        color: this.lineColor(line.source),
+        weight: 2.2,
+        opacity,
+        dashArray: this.lineDash(line.source),
+      });
+      path.bindTooltip(`${line.callsign} ↔ ${line.summitCode}`, {
+        direction: 'top',
+        className: 'sota-tooltip',
+      });
+      this.tacticalLineLayer.addLayer(path);
+    });
+  }
+
+  private lineColor(source: 'alert' | 'candidate' | 'spot'): string {
+    if (source === 'alert') return '#ff9800';
+    if (source === 'candidate') return '#38bdf8';
+    return '#c084fc';
+  }
+
+  private lineDash(source: 'alert' | 'candidate' | 'spot'): string | undefined {
+    if (source === 'alert') return undefined;
+    if (source === 'candidate') return '6 5';
+    return '2 6';
+  }
+
+  private lineOpacityForAge(ageMin: number): number {
+    if (ageMin <= 5) return 0.95;
+    if (ageMin <= 15) return 0.82;
+    if (ageMin <= 30) return 0.68;
+    if (ageMin <= 60) return 0.52;
+    return 0.35;
+  }
+
+  private getTacticalBounds(): L.LatLngBounds | null {
+    if (!this.tacticalMode()) return null;
+    const relevant = this.computeRelevantSummitCodes();
+    const points: L.LatLng[] = [];
+
+    this.allSummits.forEach(s => {
+      if (relevant.has(s.code)) points.push(L.latLng(s.lat, s.lon));
+    });
+
+    this.tacticalLines.forEach(line => {
+      if (!this.isTacticalSourceEnabled(line.source)) return;
+      points.push(L.latLng(line.fromLat, line.fromLon));
+      points.push(L.latLng(line.toLat, line.toLon));
+    });
+
+    if (!points.length) return null;
+    return L.latLngBounds(points);
   }
 
   private normalizeCallsign(callsign: string): string {
