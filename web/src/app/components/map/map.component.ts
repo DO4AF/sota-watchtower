@@ -523,6 +523,11 @@ export class MapComponent implements OnInit, OnDestroy {
               dashArray: '6 4',
             });
 
+            // Click on the trace path → pan & zoom to the activator marker
+            trace.on('click', () => {
+              this.map.setView(latlng, Math.max(this.map.getZoom(), 13), { animate: true });
+            });
+
             this.activatorLayer.addLayer(trace);
             this.activatorLayer.addLayer(marker);
             this.activators.set(cs, { callsign: cs, positions: [pos], marker, trace });

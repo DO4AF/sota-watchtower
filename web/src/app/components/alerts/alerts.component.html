@@ -22,12 +22,28 @@
       <p-tabpanels>
         <!-- Alerts tab -->
         <p-tabpanel value="0">
+          <!-- Search bar -->
+          <div class="table-toolbar">
+            <p-iconfield>
+              <p-inputicon styleClass="pi pi-search" />
+              <input
+                pInputText
+                type="text"
+                [(ngModel)]="alertFilter"
+                placeholder="Search callsign or summit…"
+                class="search-input"
+              />
+            </p-iconfield>
+            @if (alertFilter) {
+              <span class="result-count">{{ filteredAlerts.length }} result{{ filteredAlerts.length !== 1 ? 's' : '' }}</span>
+            }
+          </div>
+
           <p-table
-            [value]="alerts()"
+            [value]="filteredAlerts"
             [loading]="alertsLoading()"
-            [paginator]="true"
-            [rows]="25"
-            [rowsPerPageOptions]="[10, 25, 50]"
+            [scrollable]="true"
+            scrollHeight="flex"
             [rowHover]="true"
             [stripedRows]="true"
             styleClass="p-datatable-sm"
@@ -36,6 +52,7 @@
               <tr>
                 <th>Callsign</th>
                 <th>Summit</th>
+                <th>Distance</th>
                 <th>Status</th>
               </tr>
             </ng-template>
@@ -43,6 +60,13 @@
               <tr>
                 <td><span class="callsign-cell">{{ alert.callsign }}</span></td>
                 <td><span class="summit-cell">{{ alert.summit }}</span></td>
+                <td>
+                  @if (hasPosition(alert)) {
+                    <span class="distance-cell distance-cell--live">{{ distanceToSummit(alert) }}</span>
+                  } @else {
+                    <span class="distance-cell distance-cell--no-aprs">—</span>
+                  }
+                </td>
                 <td>
                   @if (alert.notified) {
                     <p-tag value="On summit" severity="success" icon="pi pi-map-marker" />
@@ -54,7 +78,7 @@
             </ng-template>
             <ng-template #emptymessage>
               <tr>
-                <td colspan="3" class="text-center py-4 text-muted">No active alerts</td>
+                <td colspan="4" class="text-center py-4 text-muted">No active alerts</td>
               </tr>
             </ng-template>
           </p-table>
@@ -62,12 +86,28 @@
 
         <!-- Spots tab -->
         <p-tabpanel value="1">
+          <!-- Search bar -->
+          <div class="table-toolbar">
+            <p-iconfield>
+              <p-inputicon styleClass="pi pi-search" />
+              <input
+                pInputText
+                type="text"
+                [(ngModel)]="spotFilter"
+                placeholder="Search activator, summit, freq, mode…"
+                class="search-input"
+              />
+            </p-iconfield>
+            @if (spotFilter) {
+              <span class="result-count">{{ filteredSpots.length }} result{{ filteredSpots.length !== 1 ? 's' : '' }}</span>
+            }
+          </div>
+
           <p-table
-            [value]="spots()"
+            [value]="filteredSpots"
             [loading]="spotsLoading()"
-            [paginator]="true"
-            [rows]="25"
-            [rowsPerPageOptions]="[10, 25, 50]"
+            [scrollable]="true"
+            scrollHeight="flex"
             [rowHover]="true"
             [stripedRows]="true"
             styleClass="p-datatable-sm"

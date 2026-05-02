@@ -5,9 +5,9 @@
     <div class="config-loading">Loading configuration…</div>
   } @else {
     <p-message
-      severity="warn"
+      severity="info"
       styleClass="propagation-warning"
-      text="⚠ Changes to Telegram credentials are stored in DynamoDB but do NOT automatically update running Lambda environment variables. A redeployment is required for those changes to take effect."
+      text="ℹ Telegram credentials are read from DynamoDB at runtime — changes take effect immediately without redeployment."
     />
 
     <form (ngSubmit)="save()" (keyup)="onFormChange()" (change)="onFormChange()">

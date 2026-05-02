@@ -1,12 +1,30 @@
 import json
 import re
 import boto3, os
+from functools import lru_cache
 
-# Your bot token and user ID
-telegram_group_id = os.getenv('TELEGRAM_GROUP_ID')
-telegram_user_id = os.getenv('TELEGRAM_user_ID')
+dynamodb = boto3.resource('dynamodb')
+
+def get_config():
+    """Read Telegram credentials from DynamoDB ConfigTable at runtime."""
+    table_name = os.environ.get('CONFIGTABLE_TABLE_NAME')
+    if not table_name:
+        # Fallback to env vars for backwards compatibility
+        return {
+            'telegramGroupId': os.getenv('TELEGRAM_GROUP_ID', ''),
+            'telegramUserId': os.getenv('TELEGRAM_USER_ID', ''),
+        }
+    table = dynamodb.Table(table_name)
+    response = table.scan()
+    items = response.get('Items', [])
+    config = {item['configKey']: item['configValue'] for item in items}
+    return config
 
 def send_telegram(chat_id, text):
+    if not chat_id:
+        print(f"[WARNING] No chat_id provided — skipping Telegram message")
+        return
+
     # Create a Lambda client
     client = boto3.client('lambda')
 
@@ -24,14 +42,15 @@ def send_telegram(chat_id, text):
             }
         )
     )
+    return response
 
 def get_aprs_ssid(s):
-        # Define the regex pattern
+    # Define the regex pattern
     pattern = r'[A-Za-z0-9]{3,10}-\d{1,2}'
-    
+
     # Search for the pattern in the string
     match = re.search(pattern, s)
-    
+
     # Check if a match is found
     if match:
         return match.group()  # Return the matched string
@@ -40,14 +59,16 @@ def get_aprs_ssid(s):
 
 def handler(event, context):
 
-    # Log the event argument for debugging and local development
-    # pretty_event = json.dumps(event, indent=4)
-    # print("Received event:")
-    # print(pretty_event)
+    # Load config from DynamoDB (includes Telegram credentials)
+    config = get_config()
+    telegram_group_id = config.get('telegramGroupId', os.getenv('TELEGRAM_GROUP_ID', ''))
+    telegram_user_id  = config.get('telegramUserId',  os.getenv('TELEGRAM_USER_ID', ''))
+
+    print(f"[INFO] Telegram group_id={telegram_group_id!r} user_id={telegram_user_id!r}")
 
     # Extract and decode the 'body'
     body = event.get('body', '{}')
-    
+
     # If body is a string and needs to be parsed as JSON
     if isinstance(body, str):
         try:
@@ -63,22 +84,15 @@ def handler(event, context):
         # If body is already a dictionary, use it directly
         spot_data = body
 
-    # Log the event argument for debugging and local development
-    # pretty_json = json.dumps(body, indent=4)
-    # print("Received spot data:")
-    # print(pretty_json)
-    
     # Initialize the message components
     sotastring = ""
-    
+
     # Construct the sotastring if summit information is present
     if "summitRef" in spot_data:
         sotastring = " auf " + spot_data['summitRef']
 
     # Store the trigger comment
     trigger_comment = spot_data.get("triggerComment", "NONE")
-    # print("Trigger comment:")
-    # print(trigger_comment)
 
     # Construct the message
     full_callsign = spot_data.get("fullCallsign", "No Callsign provided")
@@ -96,12 +110,11 @@ def handler(event, context):
         flag = '🇩🇪'
     else:
         flag = ""
-    
+
     aprs_information = ""
     aprs_ssid = get_aprs_ssid(comment)
     if aprs_ssid:
         aprs_information = f"🗺️ <a href=\"https://aprs.fi/?call={aprs_ssid}&timerange=10800&tail=10800&others=1&z=19&mt=terrain\">Verfolge {full_callsign} auf APRS.fi</a>"
-
 
     # HTML-formatted message with variables
     message = f"""
@@ -117,13 +130,13 @@ def handler(event, context):
     if "SOTA2TELEGRAM_VHFUHF" in trigger_comment:
         send_telegram(telegram_group_id, message)
         match_count += 1
-    
+
     if "USER" in trigger_comment:
         send_telegram(telegram_user_id, message)
         match_count += 1
-    
+
     if match_count < 1:
-        send_telegram(telegram_user_id, "Invalid trigger comment " + trigger_comment +". Check HamAlert config.")
+        send_telegram(telegram_user_id, "Invalid trigger comment " + trigger_comment + ". Check HamAlert config.")
 
     return {
         'statusCode': 200,

@@ -42,6 +42,10 @@ This project uses a memory bank in `cline_docs/`. Always read the relevant files
 - `.env` FREQUENCY_FILTER_PATTERN must be single-quoted
 - Stack: `sota-watchtower-stack` in `eu-central-1`
 - Amplify App ID: `d1e96ec1sckzck`
+- **After infrastructure changes** (template.yaml, new resources, IAM policies, etc.):
+  1. Delete the existing stack: `sam delete --stack-name sota-watchtower-stack --region eu-central-1 --no-prompts`
+  2. Re-deploy from scratch: `./deploy.sh`
+  3. This is required because SAM cannot always update certain resource types (e.g. DynamoDB table changes, Cognito pools) in-place.
 
 ## Live URLs
 - Web: https://main.d1e96ec1sckzck.amplifyapp.com

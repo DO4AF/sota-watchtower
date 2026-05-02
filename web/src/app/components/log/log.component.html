@@ -4,19 +4,41 @@
       <h2 class="log-header__title">Event Log</h2>
       <p class="log-header__sub">Real-time events from map, APRS and WebSocket</p>
     </div>
-    <p-button
-      label="Clear"
-      icon="pi pi-trash"
-      severity="secondary"
-      size="small"
-      (onClick)="clear()" />
+    <div class="log-header__actions">
+      <p-iconfield>
+        <p-inputicon styleClass="pi pi-search" />
+        <input
+          pInputText
+          type="text"
+          [(ngModel)]="filterText"
+          placeholder="Filter events…"
+          class="log-search"
+        />
+      </p-iconfield>
+      <div class="sev-filters">
+        @for (sev of severities; track sev) {
+          <button
+            class="sev-btn"
+            [class.sev-btn--active]="activeSeverities.has(sev)"
+            [attr.data-sev]="sev"
+            (click)="toggleSeverity(sev)"
+          >{{ sev }}</button>
+        }
+      </div>
+      <p-button
+        label="Clear"
+        icon="pi pi-trash"
+        severity="secondary"
+        size="small"
+        (onClick)="clear()" />
+    </div>
   </div>
 
   <div class="log-body">
-    @if (eventLog.events().length === 0) {
+    @if (filteredEvents().length === 0) {
       <div class="log-empty">
         <i class="pi pi-inbox log-empty__icon"></i>
-        <p>No events yet. Navigate to the map to start seeing data.</p>
+        <p>{{ eventLog.events().length === 0 ? 'No events yet. Navigate to the map to start seeing data.' : 'No events match the current filter.' }}</p>
       </div>
     } @else {
       <table class="log-table">
@@ -29,7 +51,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (entry of eventLog.events(); track entry.id) {
+          @for (entry of filteredEvents(); track entry.id) {
             <tr class="log-row" [class]="'log-row--' + entry.severity">
               <td class="col-time">{{ formatTime(entry.timestamp) }}</td>
               <td class="col-sev">

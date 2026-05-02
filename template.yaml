@@ -68,9 +68,12 @@ Resources:
           TELEGRAM_USER_ID: !Ref TelegramUserChatId
           TELEGRAMNOTIFYFUNCTION_FUNCTION_NAME: !Ref TelegramNotifyFunction
           TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN: !GetAtt TelegramNotifyFunction.Arn
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref TelegramNotifyFunction
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigTable
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup
@@ -156,6 +159,10 @@ Resources:
       Environment:
         Variables:
           TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigTable
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup
@@ -203,6 +210,7 @@ Resources:
           TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN: !GetAtt TelegramNotifyFunction.Arn
           WEBSOCKETBROADCASTFUNCTION_FUNCTION_ARN: !GetAtt WebSocketBroadcastFunction.Arn
           APRSPOSITIONSTABLE_TABLE_NAME: !Ref AprsPositionsTable
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
       Layers:
         - !Ref RequestsLayer
         - !Ref GeopyLayer
@@ -215,6 +223,8 @@ Resources:
             TableName: !Ref SotaAlertsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref AprsPositionsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigTable
         - LambdaInvokePolicy:
             FunctionName: !Ref TelegramNotifyFunction
         - LambdaInvokePolicy:
