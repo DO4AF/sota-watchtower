@@ -69,6 +69,9 @@
             (ngModelChange)="onFormChange()"
           />
           <small class="hint">Dynamic list from SOTA summit data cache.</small>
+          @if (validationError()) {
+            <small class="hint" style="color:#ff6b6b">{{ validationError() }}</small>
+          }
         </div>
 
         <div class="field">
@@ -122,7 +125,7 @@
           label="Save configuration"
           icon="pi pi-save"
           [loading]="saving()"
-          [disabled]="!hasChanges()"
+          [disabled]="!canSave()"
         />
         @if (hasChanges()) {
           <span class="unsaved-hint">You have unsaved changes</span>

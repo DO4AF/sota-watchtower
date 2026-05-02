@@ -108,6 +108,7 @@ interface AppConfig { telegramBotToken, telegramGroupId, telegramUserId,
   from backend `GET /config` response (cached from latest summit refresh).
 - Region selection is optional and uses values in the form `ASSOC|RegionName`.
 - Empty regions selection means: all regions of selected associations.
+- Association selection is required (at least one association must be selected before save).
 
 ## Alerts & Spots View
 - Alerts table columns: Date/Time (UTC), Callsign, Summit Ref., Summit Name, Altitude, Points, Dist. to Summit, Status, Actions.

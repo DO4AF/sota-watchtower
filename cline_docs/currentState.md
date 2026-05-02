@@ -18,6 +18,29 @@
 
 ## Recent Changes (2026-05-02)
 
+### Backend/EC2/Frontend — APRS scope stability, config latency fix, and stale marker control
+- **APRS filter refresh behavior hardened**:
+  - listener refresh interval reduced from 10 minutes to **120 seconds**
+  - listener now logs scope cardinality and explicit fallback reasons when config cache keys are missing
+  - when no associations are selected, listener falls back to safe default APRS filter instead of deriving broad scope
+- **`GET /config` latency + missing-cache issue fixed**:
+  - `GetConfigFunction` fallback now derives and persists all dynamic scope cache keys from `SummitsTable` when missing:
+    - `sotaAssociationOptions`
+    - `sotaRegionsByAssociation`
+    - `sotaAprsAreaByAssociation`
+    - `sotaAprsAreaByRegion`
+  - this avoids repeated full-table scans on subsequent config loads
+- **Scope safety enforcement**:
+  - `PutConfigFunction` now rejects empty `sotaAssociations` (HTTP 400)
+  - frontend Config page enforces at least one selected association before save
+- **Immediate stale marker cleanup on scope change**:
+  - `PutConfigFunction` now clears `AprsPositionsTable` when `sotaAssociations` or `sotaRegions` changes
+  - prevents previously broad APRS scope from continuing to overload map rendering after narrowing
+- **APRS freshness cap set to 6h**:
+  - `GetAprsPositionsFunction` now filters out items older than 6 hours by `lastSeen`
+  - map component applies an additional client-side 6h guard before rendering activators
+
+
 ### Backend/Infra/Frontend — Dynamic association/region scope + APRS filter generation
 - Removed remaining hardcoded south-Germany/Austria association assumptions in config and filtering flows.
 - `RefreshSummitsFunction` now writes dynamic option/catalog keys into `ConfigTable` after each summit refresh:

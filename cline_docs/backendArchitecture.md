@@ -57,6 +57,10 @@
 - **Trigger**: GET/PUT /config (Cognito auth)
 - **Runtime**: Python 3.12
 - **Storage**: ConfigTable (key-value DynamoDB)
+- **GetConfigFunction fallback**: if dynamic scope cache keys are missing, derives them from `SummitsTable` and persists them into `ConfigTable` to avoid repeated expensive scans.
+- **PutConfigFunction scope enforcement**:
+  - `sotaAssociations` must be non-empty
+  - on scope change (`sotaAssociations` / `sotaRegions`), clears `AprsPositionsTable` so stale out-of-scope markers are dropped immediately
 - **Config Keys**:
   - persisted user settings: `telegramBotToken`, `telegramGroupId`, `telegramUserId`, `frequencyFilterPattern`, `sotaAssociations`, `sotaRegions`, `activationZoneDistanceMeters`, `activationZoneAltitudeDeltaMeters`
   - cached dynamic options/metadata (written by `RefreshSummitsFunction`): `sotaAssociationOptions`, `sotaRegionsByAssociation`, `sotaAprsAreaByAssociation`, `sotaAprsAreaByRegion`
@@ -95,7 +99,7 @@
 ### How It Works
 1. Connects to APRS-IS server: `rotate.aprs.net:14580`
 2. Builds APRS-IS filter dynamically from ConfigTable cached extents (`a/...`) and appends `t/p` (positions only)
-3. Periodically refreshes APRS filter from config (10 min interval)
+3. Periodically refreshes APRS filter from config (120s interval)
 4. Parses APRS packets using `aprslib`
 5. Keeps walker symbol logic (`symbol_table='/'` and symbol `[` or `p`)
 6. Applies lightweight dedupe for near-identical packets per callsign (short window)

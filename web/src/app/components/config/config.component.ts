@@ -91,6 +91,7 @@ export class ConfigComponent implements OnInit {
   loading = signal(true);
   saving = signal(false);
   hasChanges = signal(false);
+  validationError = signal('');
 
   // Telegram
   telegramBotToken = '';
@@ -122,9 +123,6 @@ export class ConfigComponent implements OnInit {
         this.regionsByAssociation = parseRegionsByAssociation(cfg['sotaRegionsByAssociation']);
 
         this.selectedAssociations = parseJsonArray(cfg['sotaAssociations']);
-        if (!this.selectedAssociations.length) {
-          this.selectedAssociations = [...associationValues];
-        }
 
         this.selectedRegions = parseJsonArray(cfg['sotaRegions']);
         this.rebuildRegionOptions();
@@ -142,7 +140,12 @@ export class ConfigComponent implements OnInit {
   onFormChange(): void {
     this.rebuildRegionOptions();
     this.selectedRegions = this.selectedRegions.filter(r => this.regionOptions.some(opt => opt.value === r));
+    this.validationError.set(this.selectedAssociations.length === 0 ? 'Select at least one monitored association.' : '');
     this.hasChanges.set(this.toJson() !== this.originalJson);
+  }
+
+  canSave(): boolean {
+    return this.hasChanges() && !this.validationError();
   }
 
   private rebuildRegionOptions(): void {
@@ -158,6 +161,10 @@ export class ConfigComponent implements OnInit {
   }
 
   save(): void {
+    if (this.selectedAssociations.length === 0) {
+      this.validationError.set('Select at least one monitored association.');
+      return;
+    }
     this.saving.set(true);
     const payload: AppConfig = {
       telegramBotToken: this.telegramBotToken,

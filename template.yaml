@@ -937,7 +937,7 @@ Resources:
           CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
           SUMMITS_TABLE_NAME: !Ref SummitsTable
       Policies:
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref ConfigTable
         - DynamoDBReadPolicy:
             TableName: !Ref SummitsTable
@@ -968,9 +968,12 @@ Resources:
       Environment:
         Variables:
           CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
+          APRSPOSITIONSTABLE_TABLE_NAME: !Ref AprsPositionsTable
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ConfigTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AprsPositionsTable
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup

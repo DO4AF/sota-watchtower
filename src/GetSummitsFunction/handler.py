@@ -24,14 +24,6 @@ CORS_HEADERS = {
     'Content-Type':                 'application/json',
 }
 
-# European associations served by default when config is unavailable
-DEFAULT_ASSOCIATIONS = [
-    'DL', 'OE', 'HB', 'HB0', 'F', 'I',
-    'PA', 'ON', 'LX', '9A', 'OK', 'SP',
-    'OM', 'HA', 'S5', 'YU', 'YO', 'LZ',
-]
-
-
 def _parse_json_list(raw: str) -> list[str]:
     if not raw:
         return []
@@ -44,17 +36,38 @@ def _parse_json_list(raw: str) -> list[str]:
     return []
 
 
+def _scan_association_options_from_summits(summits_table_name: str) -> list[str]:
+    table = dynamodb.Table(summits_table_name)
+    options = set()
+    scan_kwargs = {
+        'ProjectionExpression': '#a',
+        'ExpressionAttributeNames': {'#a': 'association'},
+    }
+
+    while True:
+        response = table.scan(**scan_kwargs)
+        for item in response.get('Items', []):
+            assoc = str(item.get('association', '') or '').strip()
+            if assoc:
+                options.add(assoc)
+        if 'LastEvaluatedKey' not in response:
+            break
+        scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+
+    return sorted(options)
+
+
 def get_associations_from_config() -> list[str]:
     """Read selected associations from ConfigTable.
 
     Order of precedence:
       1) explicit selected associations (sotaAssociations)
       2) dynamic options catalog (sotaAssociationOptions)
-      3) hardcoded fallback list
+      3) scan association options from SummitsTable (generic fallback)
     """
     table_name = os.environ.get('CONFIGTABLE_TABLE_NAME')
     if not table_name:
-        return DEFAULT_ASSOCIATIONS
+        return _scan_association_options_from_summits(os.environ['SUMMITS_TABLE_NAME'])
 
     try:
         table = dynamodb.Table(table_name)
@@ -71,14 +84,14 @@ def get_associations_from_config() -> list[str]:
     except Exception as e:
         print(f"ConfigTable read error: {e}")
 
-    return DEFAULT_ASSOCIATIONS
+    return _scan_association_options_from_summits(os.environ['SUMMITS_TABLE_NAME'])
 
 
 def handler(event, context):
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
-    # Association list: explicit param > config > hardcoded defaults
+    # Association list: explicit param > config > dynamic fallback from SummitsTable
     params      = event.get('queryStringParameters') or {}
     assoc_param = params.get('associations')
     if assoc_param:

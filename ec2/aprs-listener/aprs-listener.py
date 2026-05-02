@@ -7,7 +7,7 @@ import os
 
 DEFAULT_FILTER = "a/49.0/7.7/46.0/16.5 t/p"
 MAX_AREA_FILTERS = 9
-CONFIG_REFRESH_SECONDS = 600
+CONFIG_REFRESH_SECONDS = 120
 DEDUPE_SECONDS = 45
 DEDUPE_EPSILON_DEG = 0.0003
 
@@ -68,6 +68,7 @@ def read_config_item(table, key):
 def build_aprs_filter_from_config():
     table = get_config_table()
     if not table:
+        print("[WARNING] CONFIGTABLE_TABLE_NAME not set. Using default APRS filter.")
         return DEFAULT_FILTER
 
     selected_associations = parse_json_list(read_config_item(table, "sotaAssociations"))
@@ -76,8 +77,17 @@ def build_aprs_filter_from_config():
     area_by_association = parse_json_dict(read_config_item(table, "sotaAprsAreaByAssociation"))
     area_by_region = parse_json_dict(read_config_item(table, "sotaAprsAreaByRegion"))
 
-    effective_associations = selected_associations or association_options
+    if not selected_associations:
+        print("[WARNING] No associations selected in config; using default APRS filter.")
+        return DEFAULT_FILTER
+
+    effective_associations = selected_associations
     area_filters = []
+
+    print(
+        f"[INFO] APRS scope config: selected_associations={len(selected_associations)} "
+        f"selected_regions={len(selected_regions)} assoc_options={len(association_options)}"
+    )
 
     # Region-level selection takes precedence if present.
     if selected_regions:
@@ -100,7 +110,11 @@ def build_aprs_filter_from_config():
     area_filters = [f for f in area_filters if "None" not in f]
 
     if not area_filters:
-        print("[WARNING] No APRS area filters could be derived from config. Falling back to default filter.")
+        print(
+            "[WARNING] No APRS area filters could be derived from config "
+            "(missing sotaAprsAreaByAssociation/sotaAprsAreaByRegion entries?). "
+            "Falling back to default filter."
+        )
         return DEFAULT_FILTER
 
     if len(area_filters) > MAX_AREA_FILTERS:

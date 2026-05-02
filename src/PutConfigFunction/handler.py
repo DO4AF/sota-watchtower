@@ -68,6 +68,7 @@ def handler(event, context):
 
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(os.environ['CONFIGTABLE_TABLE_NAME'])
+    aprs_positions_table_name = os.environ.get('APRSPOSITIONSTABLE_TABLE_NAME', '')
 
     # Validate association/region selections against dynamic option catalog when present.
     selected_assocs = parse_list(body.get('sotaAssociations', [])) if 'sotaAssociations' in body else None
@@ -88,6 +89,12 @@ def handler(event, context):
                     'headers': CORS_HEADERS,
                     'body': json.dumps({'error': f'Invalid associations: {invalid_assocs}'}),
                 }
+        if selected_assocs is not None and len(selected_assocs) == 0:
+            return {
+                'statusCode': 400,
+                'headers': CORS_HEADERS,
+                'body': json.dumps({'error': 'At least one association must be selected'}),
+            }
 
         if selected_regions is not None and regions_map:
             invalid_regions = []
@@ -110,12 +117,40 @@ def handler(event, context):
                     'body': json.dumps({'error': f'Invalid regions: {invalid_regions}'}),
                 }
 
+    previous_assocs = parse_list(table.get_item(Key={'configKey': 'sotaAssociations'}).get('Item', {}).get('configValue', ''))
+    previous_regions = parse_list(table.get_item(Key={'configKey': 'sotaRegions'}).get('Item', {}).get('configValue', ''))
+
     with table.batch_writer() as batch:
         for key, value in body.items():
             if key not in ALLOWED_KEYS:
                 continue
             serialized = value if isinstance(value, str) else json.dumps(value)
             batch.put_item(Item={'configKey': key, 'configValue': serialized})
+
+    # If scope changed, clear APRS positions so old broad-scope markers disappear immediately.
+    scope_changed = False
+    if selected_assocs is not None and selected_assocs != previous_assocs:
+        scope_changed = True
+    if selected_regions is not None and selected_regions != previous_regions:
+        scope_changed = True
+
+    if scope_changed and aprs_positions_table_name:
+        aprs_table = dynamodb.Table(aprs_positions_table_name)
+        scan_kwargs = {'ProjectionExpression': 'callsign'}
+        deleted = 0
+        with aprs_table.batch_writer() as batch:
+            while True:
+                response = aprs_table.scan(**scan_kwargs)
+                for item in response.get('Items', []):
+                    callsign = item.get('callsign')
+                    if not callsign:
+                        continue
+                    batch.delete_item(Key={'callsign': callsign})
+                    deleted += 1
+                if 'LastEvaluatedKey' not in response:
+                    break
+                scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+        print(f"[INFO] Scope changed -> cleared APRS positions: {deleted} items")
 
     return {
         'statusCode': 200,

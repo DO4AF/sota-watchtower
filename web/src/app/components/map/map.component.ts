@@ -711,9 +711,15 @@ export class MapComponent implements OnInit, OnDestroy {
       next: positions => {
         const cutoffMs = this.traceDurationHours() * 3_600_000;
         const now      = Date.now();
+        const maxAgeMs = 6 * 3_600_000;
+
+        const freshPositions = positions.filter(p => {
+          const ts = parseTimestamp(p.lastSeen).getTime();
+          return !Number.isNaN(ts) && now - ts <= maxAgeMs;
+        });
 
         // Remove activators no longer in the API response
-        const liveCallsigns = new Set(positions.map(p => p.callsign));
+        const liveCallsigns = new Set(freshPositions.map(p => p.callsign));
         this.activators.forEach((st, cs) => {
           if (!liveCallsigns.has(cs)) {
             this.activatorLayer.removeLayer(st.marker);
@@ -724,7 +730,7 @@ export class MapComponent implements OnInit, OnDestroy {
 
         this.aprsByBaseCallsign.clear();
 
-        positions.forEach(pos => {
+        freshPositions.forEach(pos => {
           const cs        = pos.callsign;
           const baseCs    = this.normalizeCallsign(cs);
           const freshness = activatorFreshness(pos.lastSeen);
@@ -793,7 +799,7 @@ export class MapComponent implements OnInit, OnDestroy {
         this.activatorCount.set(this.activators.size);
         this.updateSearchSuggestions();
         this.recomputeProximityPanels();
-        this.eventLog.success('APRS', `Refreshed — ${this.activators.size} activators active`);
+        this.eventLog.success('APRS', `Refreshed — ${this.activators.size} activators active (<=6h)`);
       },
       error: err => this.eventLog.error('APRS', `Failed: ${err.message}`),
     });
