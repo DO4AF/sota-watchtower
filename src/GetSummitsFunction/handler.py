@@ -32,20 +32,45 @@ DEFAULT_ASSOCIATIONS = [
 ]
 
 
+def _parse_json_list(raw: str) -> list[str]:
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [str(v).strip() for v in parsed if str(v).strip()]
+    except Exception:
+        pass
+    return []
+
+
 def get_associations_from_config() -> list[str]:
-    """Read sotaAssociations from ConfigTable; fall back to DEFAULT_ASSOCIATIONS."""
+    """Read selected associations from ConfigTable.
+
+    Order of precedence:
+      1) explicit selected associations (sotaAssociations)
+      2) dynamic options catalog (sotaAssociationOptions)
+      3) hardcoded fallback list
+    """
     table_name = os.environ.get('CONFIGTABLE_TABLE_NAME')
     if not table_name:
         return DEFAULT_ASSOCIATIONS
+
     try:
         table = dynamodb.Table(table_name)
-        resp  = table.get_item(Key={'configKey': 'config'})
-        item  = resp.get('Item', {})
-        raw   = item.get('sotaAssociations', '').strip()
-        if raw:
-            return [a.strip() for a in raw.split(',') if a.strip()]
+
+        selected = table.get_item(Key={'configKey': 'sotaAssociations'}).get('Item', {})
+        selected_values = _parse_json_list(str(selected.get('configValue', '') or ''))
+        if selected_values:
+            return selected_values
+
+        options = table.get_item(Key={'configKey': 'sotaAssociationOptions'}).get('Item', {})
+        option_values = _parse_json_list(str(options.get('configValue', '') or ''))
+        if option_values:
+            return option_values
     except Exception as e:
         print(f"ConfigTable read error: {e}")
+
     return DEFAULT_ASSOCIATIONS
 
 

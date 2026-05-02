@@ -96,9 +96,18 @@ interface SotaSpot {
 }
 interface AprsPosition { callsign, latitude, longitude, altitude, lastSeen, history? }
 interface AppConfig { telegramBotToken, telegramGroupId, telegramUserId,
-                      frequencyFilterPattern, sotaAssociations,
+                      frequencyFilterPattern, sotaAssociations, sotaRegions,
                       activationZoneDistanceMeters, activationZoneAltitudeDeltaMeters }
 ```
+
+## Config View (dynamic scope options)
+- Association options are no longer hardcoded in frontend code.
+- `/config` loads:
+  - `sotaAssociationOptions`
+  - `sotaRegionsByAssociation`
+  from backend `GET /config` response (cached from latest summit refresh).
+- Region selection is optional and uses values in the form `ASSOC|RegionName`.
+- Empty regions selection means: all regions of selected associations.
 
 ## Alerts & Spots View
 - Alerts table columns: Date/Time (UTC), Callsign, Summit Ref., Summit Name, Altitude, Points, Dist. to Summit, Status, Actions.

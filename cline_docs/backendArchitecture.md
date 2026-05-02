@@ -57,7 +57,9 @@
 - **Trigger**: GET/PUT /config (Cognito auth)
 - **Runtime**: Python 3.12
 - **Storage**: ConfigTable (key-value DynamoDB)
-- **Config Keys**: telegramBotToken, telegramGroupId, telegramUserId, frequencyFilterPattern, sotaAssociations, activationZoneDistanceMeters, activationZoneAltitudeDeltaMeters
+- **Config Keys**:
+  - persisted user settings: `telegramBotToken`, `telegramGroupId`, `telegramUserId`, `frequencyFilterPattern`, `sotaAssociations`, `sotaRegions`, `activationZoneDistanceMeters`, `activationZoneAltitudeDeltaMeters`
+  - cached dynamic options/metadata (written by `RefreshSummitsFunction`): `sotaAssociationOptions`, `sotaRegionsByAssociation`, `sotaAprsAreaByAssociation`, `sotaAprsAreaByRegion`
 
 ### TelegramNotifyFunction
 - **Trigger**: Lambda invoke (from other functions)
@@ -72,7 +74,7 @@
 ### SeedConfigFunction
 - **Trigger**: CloudFormation custom resource (on stack create)
 - **Runtime**: Python 3.12
-- **Logic**: Seeds initial config values into ConfigTable
+- **Logic**: Seeds initial config values into ConfigTable (`sotaAssociations=[]`, `sotaRegions=[]` for generic global-ready defaults)
 
 ### WebSocket Functions
 - **WebSocketConnectFunction**: Stores connectionId in WebSocketConnectionsTable
@@ -92,15 +94,18 @@
 
 ### How It Works
 1. Connects to APRS-IS server: `rotate.aprs.net:14580`
-2. Filter: `r/47.5/11.0/500` (radius filter around Alps)
-3. Parses APRS packets using `aprslib`
-4. Filters by SOTA associations (DL, OE, DM, HB, etc.)
-5. Invokes `ActivationZoneMonitorFunction` via boto3 for each valid position
+2. Builds APRS-IS filter dynamically from ConfigTable cached extents (`a/...`) and appends `t/p` (positions only)
+3. Periodically refreshes APRS filter from config (10 min interval)
+4. Parses APRS packets using `aprslib`
+5. Keeps walker symbol logic (`symbol_table='/'` and symbol `[` or `p`)
+6. Applies lightweight dedupe for near-identical packets per callsign (short window)
+7. Invokes `ActivationZoneMonitorFunction` via boto3 for each accepted position
 6. Logs to `/sota-watchtower/aprs-listener` CloudWatch log group
 
 ### IAM Role
 `AprsMonitorInstanceRole` — allows:
 - `lambda:InvokeFunction` on ActivationZoneMonitorFunction
+- `dynamodb:GetItem` / `dynamodb:Scan` on ConfigTable (for dynamic APRS scope)
 - `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents`
 
 ## DynamoDB Table Schemas

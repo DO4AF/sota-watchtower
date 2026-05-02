@@ -6,13 +6,7 @@ import time
 import os
 import boto3
 
-# Filter settings
-filter_combinations = {
-    "DL": {"summit_patterns": []},  # No specific summit filter for "DL"
-    "OE": {"summit_patterns": []},  # No specific summit filter for "OE"
-    "DM": {"summit_patterns": [r"DM", r"BW"]},  # DM requires summit codes to contain "DM" or "BW"
-    # Add more associations and summit patterns as needed
-}
+dynamodb_resource = boto3.resource('dynamodb')
 
 def build_frequency_pattern():
     """Build a safe regex pattern for frequency filtering.
@@ -54,6 +48,38 @@ def normalize_summit_ref(association_code, summit_code):
         return ''
     return f"{association}/{summit}".strip('/')
 
+
+def parse_json_list(raw):
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [str(v).strip() for v in parsed if str(v).strip()]
+    except Exception:
+        pass
+    return []
+
+
+def get_associations_from_config():
+    table_name = os.environ.get('CONFIGTABLE_TABLE_NAME')
+    if not table_name:
+        return []
+
+    try:
+        table = dynamodb_resource.Table(table_name)
+        selected_item = table.get_item(Key={'configKey': 'sotaAssociations'}).get('Item', {})
+        selected = parse_json_list(selected_item.get('configValue', ''))
+        if selected:
+            return selected
+
+        options_item = table.get_item(Key={'configKey': 'sotaAssociationOptions'}).get('Item', {})
+        options = parse_json_list(options_item.get('configValue', ''))
+        return options
+    except Exception as exc:
+        print(f"[WARNING] Could not read associations from config: {exc}")
+        return []
+
 def get_sota_alerts():
     url = f'https://api2.sota.org.uk/api/alerts'
     try:
@@ -66,15 +92,10 @@ def get_sota_alerts():
             print(response.text)  # Print response text in case of error
         return []  # Return an empty list in case of an error to prevent further issues
 
-def summit_code_matches(summit_code, summit_patterns):
-    """Check if the summit code matches any of the specified summit patterns."""
-    for pattern in summit_patterns:
-        if re.search(pattern, summit_code):
-            return True
-    return False
 
-def filter_data(data, filter_combinations, frequency_regex):
+def filter_data(data, associations, frequency_regex):
     filtered_data = {}
+    assoc_set = set(associations or [])
     
     for entry in data:
         association_code = str(entry.get("associationCode", "") or "").strip()
@@ -90,31 +111,26 @@ def filter_data(data, filter_combinations, frequency_regex):
             or entry.get("callsign", "")
         )
 
-        # Check if the association code has specific filter criteria
-        if association_code in filter_combinations:
-            summit_patterns = filter_combinations[association_code]["summit_patterns"]
+        if assoc_set and association_code not in assoc_set:
+            continue
 
-            # If summit_patterns are defined, check for summit code match
-            if summit_patterns and not summit_code_matches(summit_code, summit_patterns):
-                continue  # Skip this entry if summit code doesn't match the pattern
+        # Filter by frequency using regex
+        if re.search(frequency_regex, frequency):
+            # Generate a unique key based on activatingCallsign and summitCode
+            key = (activating_callsign, summit_ref)
 
-            # Filter by frequency using regex
-            if re.search(frequency_regex, frequency):
-                # Generate a unique key based on activatingCallsign and summitCode
-                key = (activating_callsign, summit_ref)
+            # Only keep the most recent entry by comparing timestamps
+            if key in filtered_data:
+                existing_time = parse_iso8601(filtered_data[key].get("timeStamp", ""))
+                new_time = parse_iso8601(time_stamp)
 
-                # Only keep the most recent entry by comparing timestamps
-                if key in filtered_data:
-                    existing_time = parse_iso8601(filtered_data[key].get("timeStamp", ""))
-                    new_time = parse_iso8601(time_stamp)
-
-                    if new_time and existing_time:
-                        if new_time > existing_time:
-                            filtered_data[key] = entry  # Replace with newer entry
-                    elif new_time and not existing_time:
-                        filtered_data[key] = entry
-                else:
-                    filtered_data[key] = entry  # Add new entry
+                if new_time and existing_time:
+                    if new_time > existing_time:
+                        filtered_data[key] = entry  # Replace with newer entry
+                elif new_time and not existing_time:
+                    filtered_data[key] = entry
+            else:
+                filtered_data[key] = entry  # Add new entry
     
     return list(filtered_data.values())  # Return filtered entries as a list
 
@@ -127,12 +143,13 @@ def get_next_day_start_timestamp():
 
 def handler(event, context):
     frequency_pattern = build_frequency_pattern()
+    associations = get_associations_from_config()
 
     # Get current SOTA alerts
     alerts = get_sota_alerts()
 
     # Apply the filter
-    filtered_result = filter_data(alerts, filter_combinations, frequency_pattern)
+    filtered_result = filter_data(alerts, associations, frequency_pattern)
 
     expiration_timestamp = get_next_day_start_timestamp()
 
@@ -187,7 +204,7 @@ def handler(event, context):
         dynamodb.put_item(TableName=table_name, Item=item)
 
     print(
-        f"[INFO] GetSotaAlertsFunction: fetched={len(alerts)} filtered={len(filtered_result)} "
+        f"[INFO] GetSotaAlertsFunction: associations={len(associations)} fetched={len(alerts)} filtered={len(filtered_result)} "
         f"deleted={delete_count} written={len(filtered_result)}"
     )
 

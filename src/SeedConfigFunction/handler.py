@@ -38,7 +38,8 @@ def handler(event, context):
             'telegramGroupId': props.get('TelegramGroupId', ''),
             'telegramUserId': props.get('TelegramUserId', ''),
             'frequencyFilterPattern': props.get('FrequencyFilterPattern', ''),
-            'sotaAssociations': json.dumps(['DL', 'OE', 'DM']),
+            'sotaAssociations': json.dumps([]),
+            'sotaRegions': json.dumps([]),
             'activationZoneDistanceMeters': '300',
             'activationZoneAltitudeDeltaMeters': '25',
         }

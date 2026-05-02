@@ -11,7 +11,7 @@ CORS_HEADERS = {
     'Content-Type': 'application/json',
 }
 
-DEFAULT_ASSOCIATIONS = ['DL', 'OE', 'DM']
+DEFAULT_ASSOCIATIONS = []
 
 _DESERIALIZER = TypeDeserializer()
 
@@ -81,11 +81,32 @@ def normalize_summit_ref(association_code, summit_code):
 def get_associations():
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(os.environ['CONFIGTABLE_TABLE_NAME'])
+
+    def parse_list(raw):
+        if not raw:
+            return []
+        try:
+            value = json.loads(raw)
+            if isinstance(value, list):
+                return [str(v).strip() for v in value if str(v).strip()]
+        except Exception:
+            pass
+        return []
+
     try:
         response = table.get_item(Key={'configKey': 'sotaAssociations'})
         item = response.get('Item')
         if item and item.get('configValue'):
-            return json.loads(item['configValue'])
+            selected = parse_list(item['configValue'])
+            if selected:
+                return selected
+
+        response = table.get_item(Key={'configKey': 'sotaAssociationOptions'})
+        item = response.get('Item')
+        if item and item.get('configValue'):
+            options = parse_list(item['configValue'])
+            if options:
+                return options
     except Exception:
         pass
     return DEFAULT_ASSOCIATIONS
@@ -100,7 +121,7 @@ def handler(event, context):
     response = requests.get('https://api2.sota.org.uk/api/spots/-60/all', timeout=10)
     response.raise_for_status()
     spots = response.json()
-    filtered = [s for s in spots if s.get('associationCode') in associations]
+    filtered = [s for s in spots if not associations or s.get('associationCode') in associations]
 
     summit_refs = []
     for spot in filtered:

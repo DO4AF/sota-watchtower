@@ -12,15 +12,54 @@ import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { ApiService, AppConfig } from '../../services/api.service';
 
-const ASSOCIATION_OPTIONS = [
-  { label: 'DL (Germany Alpine)', value: 'DL' },
-  { label: 'OE (Austria)', value: 'OE' },
-  { label: 'DM (Germany)', value: 'DM' },
-  { label: 'HB (Switzerland)', value: 'HB' },
-  { label: 'HB0 (Liechtenstein)', value: 'HB0' },
-  { label: 'I (Italy)', value: 'I' },
-  { label: 'F (France)', value: 'F' },
-];
+interface SelectOption {
+  label: string;
+  value: string;
+}
+
+type RegionsByAssociation = Record<string, string[]>;
+
+function parseJsonArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(v => String(v).trim()).filter(Boolean);
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(v => String(v).trim()).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function parseRegionsByAssociation(value: unknown): RegionsByAssociation {
+  const obj = parseJsonObject(value);
+  const result: RegionsByAssociation = {};
+  Object.entries(obj).forEach(([assoc, regions]) => {
+    if (!assoc.trim()) return;
+    result[assoc.trim()] = Array.isArray(regions)
+      ? regions.map(r => String(r).trim()).filter(Boolean)
+      : [];
+  });
+  return result;
+}
 
 @Component({
   selector: 'app-config',
@@ -45,7 +84,9 @@ export class ConfigComponent implements OnInit {
   private apiService = inject(ApiService);
   private messageService = inject(MessageService);
 
-  associationOptions = ASSOCIATION_OPTIONS;
+  associationOptions: SelectOption[] = [];
+  regionOptions: SelectOption[] = [];
+  private regionsByAssociation: RegionsByAssociation = {};
 
   loading = signal(true);
   saving = signal(false);
@@ -59,6 +100,7 @@ export class ConfigComponent implements OnInit {
   // Filters
   frequencyFilterPattern = '';
   selectedAssociations: string[] = [];
+  selectedRegions: string[] = [];
 
   // Activation Zone
   activationZoneDistance = 300;
@@ -73,9 +115,21 @@ export class ConfigComponent implements OnInit {
         this.telegramGroupId = (cfg['telegramGroupId'] as string) ?? '';
         this.telegramUserId = (cfg['telegramUserId'] as string) ?? '';
         this.frequencyFilterPattern = (cfg['frequencyFilterPattern'] as string) ?? '';
-        this.selectedAssociations = cfg['sotaAssociations']
-          ? JSON.parse(cfg['sotaAssociations'] as string)
-          : ['DL', 'OE', 'DM'];
+
+        const associationValues = parseJsonArray(cfg['sotaAssociationOptions']);
+        this.associationOptions = associationValues.map(value => ({ label: value, value }));
+
+        this.regionsByAssociation = parseRegionsByAssociation(cfg['sotaRegionsByAssociation']);
+
+        this.selectedAssociations = parseJsonArray(cfg['sotaAssociations']);
+        if (!this.selectedAssociations.length) {
+          this.selectedAssociations = [...associationValues];
+        }
+
+        this.selectedRegions = parseJsonArray(cfg['sotaRegions']);
+        this.rebuildRegionOptions();
+        this.selectedRegions = this.selectedRegions.filter(r => this.regionOptions.some(opt => opt.value === r));
+
         this.activationZoneDistance = Number(cfg['activationZoneDistanceMeters'] ?? 300);
         this.activationZoneAltitude = Number(cfg['activationZoneAltitudeDeltaMeters'] ?? 25);
         this.originalJson = this.toJson();
@@ -86,7 +140,21 @@ export class ConfigComponent implements OnInit {
   }
 
   onFormChange(): void {
+    this.rebuildRegionOptions();
+    this.selectedRegions = this.selectedRegions.filter(r => this.regionOptions.some(opt => opt.value === r));
     this.hasChanges.set(this.toJson() !== this.originalJson);
+  }
+
+  private rebuildRegionOptions(): void {
+    const options: SelectOption[] = [];
+    this.selectedAssociations.forEach(assoc => {
+      const regions = this.regionsByAssociation[assoc] ?? [];
+      regions.forEach(region => {
+        const value = `${assoc}|${region}`;
+        options.push({ label: `${assoc} · ${region}`, value });
+      });
+    });
+    this.regionOptions = options;
   }
 
   save(): void {
@@ -97,6 +165,7 @@ export class ConfigComponent implements OnInit {
       telegramUserId: this.telegramUserId,
       frequencyFilterPattern: this.frequencyFilterPattern,
       sotaAssociations: JSON.stringify(this.selectedAssociations),
+      sotaRegions: JSON.stringify(this.selectedRegions),
       activationZoneDistanceMeters: String(this.activationZoneDistance),
       activationZoneAltitudeDeltaMeters: String(this.activationZoneAltitude),
     };
@@ -129,6 +198,7 @@ export class ConfigComponent implements OnInit {
       telegramUserId: this.telegramUserId,
       frequencyFilterPattern: this.frequencyFilterPattern,
       selectedAssociations: this.selectedAssociations,
+      selectedRegions: this.selectedRegions,
       activationZoneDistance: this.activationZoneDistance,
       activationZoneAltitude: this.activationZoneAltitude,
     });

@@ -18,6 +18,38 @@
 
 ## Recent Changes (2026-05-02)
 
+### Backend/Infra/Frontend — Dynamic association/region scope + APRS filter generation
+- Removed remaining hardcoded south-Germany/Austria association assumptions in config and filtering flows.
+- `RefreshSummitsFunction` now writes dynamic option/catalog keys into `ConfigTable` after each summit refresh:
+  - `sotaAssociationOptions` (all currently valid associations from SOTA CSV)
+  - `sotaRegionsByAssociation` (region lists per association)
+  - `sotaAprsAreaByAssociation` (derived APRS `a/...` bbox per association)
+  - `sotaAprsAreaByRegion` (derived APRS `a/...` bbox per association+region key)
+- `SeedConfigFunction` defaults changed to generic startup values:
+  - `sotaAssociations = []` (empty => all available options)
+  - `sotaRegions = []` (empty => all regions of selected associations)
+- `PutConfigFunction` now accepts and validates `sotaRegions` (format `ASSOC|RegionName`) against cached SOTA options/regions.
+- `GetSummitsFunction`, `GetSotaAlertsFunction`, `GetSotaSpotsFunction`, and `GetSpotsWebFunction` now use dynamic association selection from config/options instead of hardcoded `DL/OE/DM` filters.
+- EC2 APRS listener (`ec2/aprs-listener/aprs-listener.py`) now:
+  - builds APRS-IS filter dynamically from ConfigTable cache (`a/...` scopes)
+  - appends `t/p` (positions only) to reduce traffic
+  - refreshes scope periodically (10 min)
+  - applies max-9 area filter guardrail
+  - keeps walker symbol logic unchanged (`/` + `[`/`p`)
+  - adds lightweight dedupe for near-identical packets per callsign (45s window)
+  - logs active filter and packet stats (`walker/invoked/deduped/too_fast/ignored_symbol`)
+- `template.yaml` updated accordingly:
+  - added `CONFIGTABLE_TABLE_NAME` + IAM reads where needed (`GetSotaSpotsFunction`, `GetSotaAlertsFunction`, `RefreshSummitsFunction`, EC2 role)
+  - EC2 `UserData` now exports `CONFIGTABLE_TABLE_NAME` and `AWS_REGION` to `/etc/environment`
+- Frontend config UI (`/config`) now loads dynamic options from backend:
+  - removed hardcoded association list
+  - added optional region multi-select
+  - `AppConfig` now includes `sotaRegions`
+- Validation rerun:
+  - `python -m py_compile ...` for touched backend handlers ✅
+  - `sam validate` ✅ (basic validation)
+  - `cd web && npx ng build --configuration production` ✅ (known warnings unchanged: SCSS budgets + Leaflet CommonJS)
+
 ### Frontend — Map alert recency + Alerts/Spots freshness highlighting and filtering
 - **Map widgets alert recency rule updated:** overdue alerts are no longer kept indefinitely in map widget context.
   - Alerts are now retained on map widgets only when they are future/current or at most **60 minutes overdue**.
@@ -205,7 +237,12 @@
 - `telegramGroupId` — Telegram group chat ID
 - `telegramUserId` — Telegram user chat ID
 - `frequencyFilterPattern` — regex for filtering APRS spots by frequency
-- `associations` — list of SOTA associations to monitor
+- `sotaAssociations` — selected SOTA associations to monitor (empty = all cached options)
+- `sotaRegions` — optional selected regions (`ASSOC|RegionName`)
+- `sotaAssociationOptions` — cached dynamic associations from latest summit refresh
+- `sotaRegionsByAssociation` — cached dynamic regions per association
+- `sotaAprsAreaByAssociation` — cached APRS `a/...` bbox per association
+- `sotaAprsAreaByRegion` — cached APRS `a/...` bbox per region key
 - `activationZoneDistanceMeters` — max horizontal distance from summit (default: 150)
 - `activationZoneAltitudeDeltaMeters` — max altitude below summit (default: 25)
 

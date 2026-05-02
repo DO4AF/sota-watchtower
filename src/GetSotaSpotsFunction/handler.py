@@ -1,15 +1,40 @@
 import json
 import requests
-import re
+import os
+import boto3
 from datetime import datetime
 
-# Filter settings
-filter_combinations = {
-    "DL": {"summit_patterns": []},  # No specific summit filter for "DL"
-    "OE": {"summit_patterns": []},  # No specific summit filter for "OE"
-    "DM": {"summit_patterns": [r"DM", r"BW"]},  # DM requires summit codes to contain "DM" or "BW"
-    # Add more associations and summit patterns as needed
-}
+dynamodb = boto3.resource('dynamodb')
+
+
+def parse_json_list(raw):
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [str(v).strip() for v in parsed if str(v).strip()]
+    except Exception:
+        pass
+    return []
+
+
+def get_associations():
+    table_name = os.environ.get('CONFIGTABLE_TABLE_NAME')
+    if not table_name:
+        return []
+    try:
+        table = dynamodb.Table(table_name)
+        selected_item = table.get_item(Key={'configKey': 'sotaAssociations'}).get('Item', {})
+        selected = parse_json_list(selected_item.get('configValue', ''))
+        if selected:
+            return selected
+
+        options_item = table.get_item(Key={'configKey': 'sotaAssociationOptions'}).get('Item', {})
+        return parse_json_list(options_item.get('configValue', ''))
+    except Exception as exc:
+        print(f"[WARNING] Could not read spot associations from config: {exc}")
+        return []
 
 def get_sota_spots():
     url = f'https://api2.sota.org.uk/api/spots/-5/all'
@@ -23,15 +48,9 @@ def get_sota_spots():
             print(response.text)  # Print response text in case of error
         return []  # Return an empty list in case of an error to prevent further issues
 
-def summit_code_matches(summit_code, summit_patterns):
-    """Check if the summit code matches any of the specified summit patterns."""
-    for pattern in summit_patterns:
-        if re.search(pattern, summit_code):
-            return True
-    return False
-
-def filter_data(data, filter_combinations):
+def filter_data(data, associations):
     filtered_data = {}
+    assoc_set = set(associations or [])
     
     for entry in data:
         association_code = entry.get("associationCode", "")
@@ -39,36 +58,32 @@ def filter_data(data, filter_combinations):
         time_stamp = entry.get("timeStamp", "")
         activating_callsign = entry.get("activatingCallsign", "")
 
-        # Check if the association code has specific filter criteria
-        if association_code in filter_combinations:
-            summit_patterns = filter_combinations[association_code]["summit_patterns"]
+        if assoc_set and association_code not in assoc_set:
+            continue
 
-            # If summit_patterns are defined, check for summit code match
-            if summit_patterns and not summit_code_matches(summit_code, summit_patterns):
-                continue  # Skip this entry if summit code doesn't match the pattern
+        # Generate a unique key based on activatingCallsign and summitCode
+        key = (activating_callsign, summit_code)
 
-            # Generate a unique key based on activatingCallsign and summitCode
-            key = (activating_callsign, summit_code)
+        # Only keep the most recent entry by comparing timestamps
+        if key in filtered_data:
+            # Convert to datetime for comparison
+            existing_time = datetime.fromisoformat(filtered_data[key]["timeStamp"])
+            new_time = datetime.fromisoformat(time_stamp)
 
-            # Only keep the most recent entry by comparing timestamps
-            if key in filtered_data:
-                # Convert to datetime for comparison
-                existing_time = datetime.fromisoformat(filtered_data[key]["timeStamp"])
-                new_time = datetime.fromisoformat(time_stamp)
-
-                if new_time > existing_time:
-                    filtered_data[key] = entry  # Replace with newer entry
-            else:
-                filtered_data[key] = entry  # Add new entry
+            if new_time > existing_time:
+                filtered_data[key] = entry  # Replace with newer entry
+        else:
+            filtered_data[key] = entry  # Add new entry
     
     return list(filtered_data.values())  # Return filtered entries as a list
 
 def handler(event, context):
     # Get current SOTA spots
     spots = get_sota_spots()
+    associations = get_associations()
 
     # Apply the filter
-    filtered_result = filter_data(spots, filter_combinations)
+    filtered_result = filter_data(spots, associations)
 
     # # Print the filtered result with proper Unicode characters
     # for result in filtered_result:

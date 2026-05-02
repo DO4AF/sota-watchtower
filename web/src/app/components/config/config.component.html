@@ -68,10 +68,23 @@
             styleClass="w-full"
             (ngModelChange)="onFormChange()"
           />
-          <small class="hint">
-            Summits dataset currently covers DL, OE, DM only.
-            Selecting other associations will filter spots but not add map markers.
-          </small>
+          <small class="hint">Dynamic list from SOTA summit data cache.</small>
+        </div>
+
+        <div class="field">
+          <label for="regions">Monitored Regions (optional, narrows APRS scope)</label>
+          <p-multiselect
+            inputId="regions"
+            [options]="regionOptions"
+            [(ngModel)]="selectedRegions"
+            name="regions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="All regions of selected associations"
+            styleClass="w-full"
+            (ngModelChange)="onFormChange()"
+          />
+          <small class="hint">Format: Association · Region. Empty = all regions of selected associations.</small>
         </div>
       </p-card>
 

@@ -16,6 +16,7 @@ import io
 import json
 import os
 import urllib.request
+from collections import defaultdict
 from datetime import date
 from datetime import datetime
 
@@ -24,6 +25,31 @@ import boto3
 SOTA_CSV_URL = "https://storage.sota.org.uk/summitslist.csv"
 dynamodb = boto3.resource('dynamodb')
 s3_client = boto3.client('s3')
+
+
+def update_bbox(bbox: dict, lat: float, lon: float) -> None:
+    bbox['minLat'] = min(bbox['minLat'], lat)
+    bbox['maxLat'] = max(bbox['maxLat'], lat)
+    bbox['minLon'] = min(bbox['minLon'], lon)
+    bbox['maxLon'] = max(bbox['maxLon'], lon)
+
+
+def make_bbox():
+    return {
+        'minLat': 90.0,
+        'maxLat': -90.0,
+        'minLon': 180.0,
+        'maxLon': -180.0,
+    }
+
+
+def to_aprs_area(bbox: dict) -> dict:
+    return {
+        'latN': round(bbox['maxLat'], 4),
+        'lonW': round(bbox['minLon'], 4),
+        'latS': round(bbox['minLat'], 4),
+        'lonE': round(bbox['maxLon'], 4),
+    }
 
 
 def parse_sota_date(raw_value: str) -> date | None:
@@ -40,7 +66,9 @@ def parse_sota_date(raw_value: str) -> date | None:
 def handler(event, context):
     table_name  = os.environ['SUMMITS_TABLE_NAME']
     bucket_name = os.environ.get('SUMMITS_BUCKET_NAME')
+    config_table_name = os.environ.get('CONFIGTABLE_TABLE_NAME')
     table = dynamodb.Table(table_name)
+    config_table = dynamodb.Table(config_table_name) if config_table_name else None
     today = date.today()
 
     # ── Download CSV ──────────────────────────────────────────────────────────
@@ -69,6 +97,10 @@ def handler(event, context):
     written  = 0
     skipped  = 0
     features = []   # for the S3 GeoJSON
+    associations = set()
+    regions_by_association = defaultdict(set)
+    bbox_by_association = defaultdict(make_bbox)
+    bbox_by_region = defaultdict(make_bbox)
 
     with table.batch_writer() as batch:
         for row in reader:
@@ -92,6 +124,8 @@ def handler(event, context):
 
             # Extract top-level association code ("DL/AL-001" → "DL")
             association = summit_code.split('/')[0] if '/' in summit_code else summit_code
+            if association:
+                associations.add(association)
 
             try:
                 alt_m  = int(row.get('AltM', '0').strip() or '0')
@@ -106,9 +140,23 @@ def handler(event, context):
                 skipped += 1
                 continue
 
+            try:
+                lat_f = float(lat)
+                lon_f = float(lon)
+            except ValueError:
+                skipped += 1
+                continue
+
             peak_name   = row.get('SummitName', '').strip()
             assoc_name  = row.get('AssociationName', '').strip()
             region_name = row.get('RegionName', '').strip()
+            if association and region_name:
+                regions_by_association[association].add(region_name)
+            if association:
+                update_bbox(bbox_by_association[association], lat_f, lon_f)
+            if association and region_name:
+                region_key = f"{association}|{region_name}"
+                update_bbox(bbox_by_region[region_key], lat_f, lon_f)
 
             batch.put_item(Item={
                 'summitCode':      summit_code,
@@ -131,7 +179,7 @@ def handler(event, context):
                     'type': 'Feature',
                     'geometry': {
                         'type':        'Point',
-                        'coordinates': [round(float(lon), 5), round(float(lat), 5)],
+                        'coordinates': [round(lon_f, 5), round(lat_f, 5)],
                     },
                     'properties': {
                         'c': summit_code,           # summitCode
@@ -146,6 +194,57 @@ def handler(event, context):
                 pass  # skip bad coordinates for GeoJSON but already written to DDB
 
     print(f"RefreshSummits complete: {written} written, {skipped} skipped")
+
+    # ── Update dynamic config option catalog in ConfigTable ─────────────────────
+    if config_table:
+        assoc_options = sorted(a for a in associations if a)
+        region_options = {
+            assoc: sorted(list(regions))
+            for assoc, regions in sorted(regions_by_association.items())
+            if assoc
+        }
+        aprs_area_by_association = {
+            assoc: to_aprs_area(bbox)
+            for assoc, bbox in sorted(bbox_by_association.items())
+            if assoc
+        }
+        aprs_area_by_region = {
+            key: to_aprs_area(bbox)
+            for key, bbox in sorted(bbox_by_region.items())
+            if key
+        }
+
+        config_table.put_item(
+            Item={
+                'configKey': 'sotaAssociationOptions',
+                'configValue': json.dumps(assoc_options),
+            }
+        )
+        config_table.put_item(
+            Item={
+                'configKey': 'sotaRegionsByAssociation',
+                'configValue': json.dumps(region_options),
+            }
+        )
+        config_table.put_item(
+            Item={
+                'configKey': 'sotaAprsAreaByAssociation',
+                'configValue': json.dumps(aprs_area_by_association),
+            }
+        )
+        config_table.put_item(
+            Item={
+                'configKey': 'sotaAprsAreaByRegion',
+                'configValue': json.dumps(aprs_area_by_region),
+            }
+        )
+        print(
+            f"Updated config options: associations={len(assoc_options)} "
+            f"assoc-with-regions={len(region_options)} "
+            f"assoc-bboxes={len(aprs_area_by_association)} region-bboxes={len(aprs_area_by_region)}"
+        )
+    else:
+        print("CONFIGTABLE_TABLE_NAME not set — skipping config option catalog refresh")
 
     # ── Upload worldwide GeoJSON to S3 ────────────────────────────────────────
     if bucket_name and features:

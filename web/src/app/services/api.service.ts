@@ -60,6 +60,7 @@ export interface AppConfig {
   telegramUserId: string;
   frequencyFilterPattern: string;
   sotaAssociations: string;
+  sotaRegions: string;
   activationZoneDistanceMeters: string;
   activationZoneAltitudeDeltaMeters: string;
 }

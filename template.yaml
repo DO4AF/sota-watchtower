@@ -114,9 +114,12 @@ Resources:
           FREQUENCY_FILTER_PATTERN: !Ref FrequencyFilterPattern
           SOTAALERTSTABLE_TABLE_NAME: !Ref SotaAlertsTable
           SOTAALERTSTABLE_TABLE_ARN: !GetAtt SotaAlertsTable.Arn
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref SotaAlertsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigTable
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup
@@ -188,6 +191,12 @@ Resources:
       Tracing: Active
       Layers:
         - !Ref RequestsLayer
+      Environment:
+        Variables:
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigTable
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup
@@ -281,6 +290,8 @@ Resources:
           #!/bin/bash
           echo "ACTIVATIONZONEMONITORFUNCTION_FUNCTION_ARN=${ActivationZoneMonitorFunction.Arn}" >> /etc/profile
           echo "ACTIVATIONZONEMONITORFUNCTION_FUNCTION_ARN=${ActivationZoneMonitorFunction.Arn}" >> /etc/environment
+          echo "CONFIGTABLE_TABLE_NAME=${ConfigTable}" >> /etc/profile
+          echo "CONFIGTABLE_TABLE_NAME=${ConfigTable}" >> /etc/environment
           echo "AWS_REGION=${AWS::Region}" >> /etc/profile
           echo "AWS_REGION=${AWS::Region}" >> /etc/environment
           # Install necessary packages
@@ -334,6 +345,11 @@ Resources:
                 Action:
                   - lambda:InvokeFunction
                 Resource: !GetAtt ActivationZoneMonitorFunction.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                Resource: !GetAtt ConfigTable.Arn
   SotaWatchtowerMasterLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -814,9 +830,14 @@ Resources:
         Variables:
           SUMMITS_TABLE_NAME: !Ref SummitsTable
           SUMMITS_BUCKET_NAME: !Ref SummitsBucket
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref SummitsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConfigTable
         - S3WritePolicy:
             BucketName: !Ref SummitsBucket
       LoggingConfig:
