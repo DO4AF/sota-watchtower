@@ -18,6 +18,10 @@
 
 ## Recent Changes (2026-05-02)
 
+### Frontend — Alerts Layout Fix
+- **Alerts view tables restored**: added explicit host flex sizing to `alerts.component.scss` (`:host { display:flex; flex-direction:column; flex:1; min-height:0; height:100%; }`).
+- This fixes a layout collapse where only the header row rendered and both table panels had zero height in `/alerts`.
+
 ### Backend — Dynamic Telegram Configuration
 - **TelegramNotifyFunction** now reads Telegram bot token from DynamoDB `ConfigTable` at runtime instead of from Lambda environment variables. The env var `TELEGRAM_BOT_TOKEN` is still set (for fallback), but the DynamoDB value takes precedence. **No redeployment needed when changing Telegram credentials.**
 - **HamAlertProcessFunction** fixed: env var key was `TELEGRAM_user_ID` — corrected to `TELEGRAM_USER_ID`. Function also now reads Telegram Group/User IDs from ConfigTable at runtime.

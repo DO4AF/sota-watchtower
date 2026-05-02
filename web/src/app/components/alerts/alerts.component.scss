@@ -1,3 +1,12 @@
+// The host must fill the routed main-content flex column.
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
 // ── Page shell ────────────────────────────────────────────────────────────────
 // The .main-content wrapper in app.scss is height:100vh + overflow:hidden.
 // We only need to fill it and prevent our own overflow.
