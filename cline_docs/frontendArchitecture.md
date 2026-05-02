@@ -78,6 +78,8 @@ The app uses a **left sidebar** layout:
 - **Tactical lines**: activator→summit association lines with source styles (alert=solid, candidate=dashed, spot=dotted) and age-based opacity fade
 - **Tactical source chips**: quick include/exclude of `Alerts`, `Recent spots` (60 min window), and `Candidates`
 - **Auto-fit tactical**: one-click fit-to-bounds for tactical summits and active tactical lines
+- **Tactical activator filtering**: in tactical mode, only activators participating in active tactical associations are rendered (non-relevant activators are hidden)
+- **Summit tooltip reliability**: tactical glow rings are non-interactive so summit marker tooltips/popups behave the same as normal view
 - **Debug log panel**: Toggleable side panel showing events
 - Callsign country flags are shown (when resolvable) in activator-related UI text.
 - Refreshes APRS positions every 60 seconds

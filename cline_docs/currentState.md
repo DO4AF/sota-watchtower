@@ -18,6 +18,12 @@
 
 ## Recent Changes (2026-05-02)
 
+### Frontend — Tactical activator relevance + summit tooltip regression fix
+- Tactical mode now also limits **activator markers/traces** to only those activators that are relevant to active tactical associations (respecting source chips).
+- This removes non-relevant activators from tactical view and improves focus/noise ratio.
+- Fixed summit tooltip regression for tactical-relevant summits by making animated glow rings non-interactive (`interactive: false`) so summit circle marker tooltips/popups are reachable again.
+- Validation rerun: `cd web && npx ng build --configuration production` ✅ (known warnings unchanged: SCSS budget + Leaflet CommonJS).
+
 ### Frontend — Tactical View + Upcoming Alerts panel on Map
 - Added a new **Tactical View toggle** in the map toolbar (Standard/Tactical) with an **Auto-fit tactical** action.
 - Added **Tactical source filter chips** (`Alerts`, `Recent spots`, `Candidates`) so users can quickly declutter tactical context.

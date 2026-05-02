@@ -591,6 +591,7 @@ export class MapComponent implements OnInit, OnDestroy {
     const relevantCodes = this.computeRelevantSummitCodes();
 
     this.renderTacticalLines(bounds);
+    this.applyActivatorVisibility();
 
     // --- Remove markers that have scrolled out of the padded bounds ---
     const toRemove: string[] = [];
@@ -655,6 +656,7 @@ export class MapComponent implements OnInit, OnDestroy {
           weight:      3,
           fillOpacity: 0,
           opacity:     0.8,
+          interactive: false,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           className:   'summit-glow' as any,
         });
@@ -1083,6 +1085,7 @@ export class MapComponent implements OnInit, OnDestroy {
     this.candidatesApproaching.set(candidateEntries);
     this.tacticalLines = [...tacticalLines, ...spotTacticalLines];
     this.renderTacticalLines(this.map.getBounds().pad(VIEWPORT_PAD));
+    this.applyActivatorVisibility();
   }
 
   private proximityPercent(distanceKm: number): number {
@@ -1148,6 +1151,33 @@ export class MapComponent implements OnInit, OnDestroy {
         className: 'sota-tooltip',
       });
       this.tacticalLineLayer.addLayer(path);
+    });
+  }
+
+  private applyActivatorVisibility(): void {
+    if (!this.tacticalMode()) {
+      this.activators.forEach(st => {
+        if (!this.activatorLayer.hasLayer(st.trace)) this.activatorLayer.addLayer(st.trace);
+        if (!this.activatorLayer.hasLayer(st.marker)) this.activatorLayer.addLayer(st.marker);
+      });
+      return;
+    }
+
+    const relevantCallsigns = new Set<string>();
+    this.tacticalLines.forEach(line => {
+      if (!this.isTacticalSourceEnabled(line.source)) return;
+      relevantCallsigns.add(line.callsign);
+    });
+
+    this.activators.forEach(st => {
+      const visible = relevantCallsigns.has(st.callsign);
+      if (visible) {
+        if (!this.activatorLayer.hasLayer(st.trace)) this.activatorLayer.addLayer(st.trace);
+        if (!this.activatorLayer.hasLayer(st.marker)) this.activatorLayer.addLayer(st.marker);
+      } else {
+        if (this.activatorLayer.hasLayer(st.trace)) this.activatorLayer.removeLayer(st.trace);
+        if (this.activatorLayer.hasLayer(st.marker)) this.activatorLayer.removeLayer(st.marker);
+      }
     });
   }
 
