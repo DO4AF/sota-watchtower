@@ -18,6 +18,17 @@
 
 ## Recent Changes (2026-05-02)
 
+### Frontend — Callsign flag prefix table expanded to full ITU allocation coverage
+- Reworked `web/src/app/shared/callsign-flag.util.ts` from a small static prefix list to a rule-based matcher supporting both:
+  - exact prefixes (e.g. `HB0`, `3A`, `A6`)
+  - alphanumeric prefix ranges (e.g. `AA–AL`, `5C–5G`, `3DA–3DM`, `SSA–SSM`)
+- Imported the full prefix allocation dataset provided for this task (country allocations) and encoded precedence-sensitive overrides, including:
+  - **Taiwan** subset ranges (`BM–BQ`, `BU–BX`) overriding broad `B` (China)
+  - **Liechtenstein** (`HB0`, `HB3Y`, `HBL`) overriding broad `HB` (Switzerland)
+- Matching now sorts rules by specificity (longest prefix first) to ensure deterministic behavior for overlapping allocations.
+- Non-country allocations from the source table are explicitly handled as no-flag prefixes (`C7`, `4U`, `4Y`), preserving existing "known country only" rendering behavior.
+- Validation rerun: `cd web && npx ng build --configuration production` ✅ (known warnings unchanged: SCSS budgets + Leaflet CommonJS).
+
 ### Frontend/Auth — concrete fix for login hanging perception
 - Implemented a direct auth-flow fix in `web/src/app/services/auth.service.ts`:
   - added timeout wrapper for Cognito calls (`signIn`, `getCurrentUser`) so login/session checks fail fast instead of waiting indefinitely on stalled network calls
