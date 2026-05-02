@@ -116,19 +116,20 @@
     overflow: hidden;
 
     .panel--approaching {
-      flex: 1 1 0;
+      flex: 0 1 auto;
       min-height: 0;
+      max-height: calc((100% - 10px) / 3);
       display: flex;
       flex-direction: column;
 
       .proximity-list {
-        flex: 1 1 0;
+        flex: 1 1 auto;
         max-height: none;
       }
     }
 
     .panel--candidates {
-      flex: 2 1 0;
+      flex: 1 1 0;
       min-height: 0;
       display: flex;
       flex-direction: column;
@@ -343,6 +344,10 @@
     max-height: none;
   }
 
+  .map-overlay--right-top .panel--approaching {
+    max-height: none;
+  }
+
   .map-wrap {
     overflow: auto;
     gap: 8px;
@@ -380,7 +385,7 @@
 .map-legend {
   position: absolute;
   bottom: 36px;
-  right: 10px;
+  left: 10px;
   z-index: 500;
   background: var(--p-surface-800);
   border: 1px solid var(--p-surface-600);
