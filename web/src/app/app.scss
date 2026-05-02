@@ -171,3 +171,14 @@ $transition: 0.22s ease;
   flex-direction: column;
   min-width: 0;
 }
+
+// Angular inserts the routed component's host element as a sibling after
+// <router-outlet>. Without this rule it has no height, causing all
+// height:100% / scrollHeight="flex" chains inside to collapse to 0.
+.main-content > *:not(router-outlet) {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
