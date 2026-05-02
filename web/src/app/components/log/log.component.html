@@ -10,7 +10,8 @@
         <input
           pInputText
           type="text"
-          [(ngModel)]="filterText"
+          [ngModel]="filterText()"
+          (ngModelChange)="filterText.set($event)"
           placeholder="Filter events…"
           class="log-search"
         />
@@ -19,7 +20,7 @@
         @for (sev of severities; track sev) {
           <button
             class="sev-btn"
-            [class.sev-btn--active]="activeSeverities.has(sev)"
+            [class.sev-btn--active]="isSevActive(sev)"
             [attr.data-sev]="sev"
             (click)="toggleSeverity(sev)"
           >{{ sev }}</button>
