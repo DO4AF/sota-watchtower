@@ -18,6 +18,24 @@
 
 ## Recent Changes (2026-05-02)
 
+### Frontend — Map legend + alerted/upcoming panel semantics update
+- **Legend updated** to match current map behavior:
+  - summit point colors now shown as **discrete original SOTLAS buckets** (`1/2/4/6/8/10`) instead of an old gradient bar
+  - retained activator freshness and tactical-line entries
+  - added explicit indicator entries for **🔔 active alert badge** and **summit glow ring = planned today (UTC)**
+  - removed outdated legend entry about gray no-APRS progress bars
+- **Alerted panel behavior changed**:
+  - panel renamed to **Alerted activators (APRS)**
+  - now includes **all alerted activators that have APRS** (no `<2 km` cutoff)
+  - still sorted by **distance to alerted summit** and keeps distance/proximity bar visualization
+- **Upcoming panel behavior changed**:
+  - now explicitly **Upcoming Alerts (no APRS)** only
+  - removed proximity/gray bars in this panel
+  - each row now shows **planned alert time (UTC)** and **time remaining / overdue** text
+  - sorted by alert time ascending (earliest first)
+- Added alert-time parsing in `map.component.ts` to support robust countdown formatting from `dateActivated`/`activationDate` values.
+- Validation rerun: `cd web && npx ng build --configuration production` ✅ (known warnings unchanged: SCSS budget + Leaflet CommonJS).
+
 ### Frontend — Alerts/Spots table width optimization (comments removed)
 - Removed the **Frequencies/Comments** column from the Alerts table to reduce horizontal width and avoid unnecessary scrolling.
 - Removed the **Comments** column from the Live Spots table for the same reason.

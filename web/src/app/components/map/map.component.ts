@@ -128,6 +128,7 @@ interface ActiveAlert {
   callsign: string;
   baseCallsign: string;
   summit: string;
+  alertTimeMs: number | null;
 }
 
 interface SearchSuggestion {
@@ -152,6 +153,7 @@ interface ProximityEntry {
   activatorLat: number | null;
   activatorLon: number | null;
   ageMin: number | null;
+  alertTimeMs: number | null;
 }
 
 interface TacticalLineEntry {
@@ -535,6 +537,7 @@ export class MapComponent implements OnInit, OnDestroy {
       if (!isActiveAlert(a)) return;
       const code = String(a['summit'] ?? a['summitCode'] ?? a['summitRef'] ?? '');
       const callsign = String(a['callsign'] ?? a['activatorCallsign'] ?? '');
+      const alertTimeRaw = String(a['dateActivated'] ?? a['date_activated'] ?? a['activationDate'] ?? '').trim();
       const alertDate = alertDateKey(a);
       if (code && alertDate === todayUtc) this.todayPlannedSummits.add(code);
       if (callsign && code) {
@@ -542,6 +545,7 @@ export class MapComponent implements OnInit, OnDestroy {
           callsign,
           baseCallsign: this.normalizeCallsign(callsign),
           summit: code,
+          alertTimeMs: this.parseAlertTimeMs(alertTimeRaw),
         };
         this.activeAlerts.push(active);
         this.activeAlertBaseCallsigns.add(active.baseCallsign);
@@ -834,17 +838,30 @@ export class MapComponent implements OnInit, OnDestroy {
     return entry.distanceKm !== null;
   }
 
-  progressWidth(entry: ProximityEntry): number {
-    return entry.progressPct ?? 100;
+  upcomingAlertTimeUtc(entry: ProximityEntry): string {
+    if (entry.alertTimeMs === null) return 'Unknown UTC';
+    return new Date(entry.alertTimeMs).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
   }
 
-  proximityStatus(entry: ProximityEntry): string {
-    if (!entry.hasAprs) return 'No APRS';
-    if (entry.ageMin === null) return 'APRS';
-    if (entry.ageMin < 5) return 'Live';
-    if (entry.ageMin < 15) return 'Fresh';
-    if (entry.ageMin < 30) return 'Aging';
-    return 'Stale';
+  upcomingRemainingLabel(entry: ProximityEntry): string {
+    if (entry.alertTimeMs === null) return 'Unknown time';
+    const deltaMin = Math.round((entry.alertTimeMs - Date.now()) / 60_000);
+    const absMin = Math.abs(deltaMin);
+    const h = Math.floor(absMin / 60);
+    const m = absMin % 60;
+    const duration = h > 0 ? `${h}h ${m}m` : `${m}m`;
+    return deltaMin >= 0 ? `in ${duration}` : `overdue ${duration}`;
+  }
+
+  upcomingRemainingClass(entry: ProximityEntry): string {
+    if (entry.alertTimeMs === null) return 'proximity-item__status--unknown';
+    return entry.alertTimeMs >= Date.now()
+      ? 'proximity-item__status--upcoming'
+      : 'proximity-item__status--overdue';
+  }
+
+  progressWidth(entry: ProximityEntry): number {
+    return entry.progressPct ?? 100;
   }
 
   toggleTacticalMode(): void {
@@ -941,6 +958,7 @@ export class MapComponent implements OnInit, OnDestroy {
           activatorLat: null,
           activatorLon: null,
           ageMin: null,
+          alertTimeMs: alert.alertTimeMs,
         });
         return;
       }
@@ -960,6 +978,7 @@ export class MapComponent implements OnInit, OnDestroy {
           activatorLat: null,
           activatorLon: null,
           ageMin: null,
+          alertTimeMs: alert.alertTimeMs,
         });
         return;
       }
@@ -979,25 +998,26 @@ export class MapComponent implements OnInit, OnDestroy {
         activatorLat,
         activatorLon,
         ageMin,
+        alertTimeMs: alert.alertTimeMs,
       };
 
-      upcomingEntries.push(upcomingEntry);
-
-      if (distanceKm < this.APPROACHING_DISTANCE_KM) alertedEntries.push(upcomingEntry);
+      alertedEntries.push(upcomingEntry);
     });
 
     alertedEntries.sort((a, b) => (a.distanceKm ?? Number.POSITIVE_INFINITY) - (b.distanceKm ?? Number.POSITIVE_INFINITY));
 
     upcomingEntries.sort((a, b) => {
-      if (a.hasAprs !== b.hasAprs) return a.hasAprs ? -1 : 1;
-      return (a.distanceKm ?? Number.POSITIVE_INFINITY) - (b.distanceKm ?? Number.POSITIVE_INFINITY);
+      if (a.alertTimeMs === null && b.alertTimeMs === null) return a.callsign.localeCompare(b.callsign);
+      if (a.alertTimeMs === null) return 1;
+      if (b.alertTimeMs === null) return -1;
+      return a.alertTimeMs - b.alertTimeMs;
     });
 
     const alertedBases = new Set(this.activeAlerts.map(a => a.baseCallsign));
     const candidateEntries: ProximityEntry[] = [];
     const tacticalLines: TacticalLineEntry[] = [];
 
-    upcomingEntries.forEach(entry => {
+    alertedEntries.forEach(entry => {
       if (!entry.hasAprs || entry.activatorLat === null || entry.activatorLon === null || entry.ageMin === null) return;
       tacticalLines.push({
         source: 'alert',
@@ -1045,6 +1065,7 @@ export class MapComponent implements OnInit, OnDestroy {
         activatorLat,
         activatorLon,
         ageMin,
+        alertTimeMs: null,
       };
       candidateEntries.push(entry);
       tacticalLines.push({
@@ -1097,6 +1118,16 @@ export class MapComponent implements OnInit, OnDestroy {
     const raw = String(spot.time ?? spot.timeStamp ?? '').trim();
     if (!raw) return null;
     const ts = new Date(raw).getTime();
+    if (!Number.isNaN(ts)) return ts;
+    const numeric = Number(raw);
+    if (Number.isNaN(numeric)) return null;
+    return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+  }
+
+  private parseAlertTimeMs(raw: string): number | null {
+    if (!raw) return null;
+    const cleaned = raw.replace(/(\.\d{3})\d+/, '$1').replace('Z', '+00:00');
+    const ts = new Date(cleaned).getTime();
     if (!Number.isNaN(ts)) return ts;
     const numeric = Number(raw);
     if (Number.isNaN(numeric)) return null;

@@ -107,9 +107,9 @@
       }
 
       <div class="panel panel--approaching">
-        <div class="panel__title">Approaching (active alerts, &lt;2 km)</div>
+        <div class="panel__title">Alerted activators (APRS)</div>
         @if (alertedApproaching().length === 0) {
-          <div class="panel__empty">No alerted activators currently within 2 km</div>
+          <div class="panel__empty">No alerted activators with APRS currently</div>
         } @else {
           <div class="proximity-list">
             @for (entry of alertedApproaching(); track entry.callsign + ':' + entry.summitCode) {
@@ -136,9 +136,9 @@
       </div>
 
       <div class="panel panel--upcoming-alerts">
-        <div class="panel__title">Upcoming Alerts (all active)</div>
+        <div class="panel__title">Upcoming Alerts (no APRS)</div>
         @if (upcomingAlerts().length === 0) {
-          <div class="panel__empty">No active alerts currently</div>
+          <div class="panel__empty">No upcoming no-APRS alerts currently</div>
         } @else {
           <div class="proximity-list">
             @for (entry of upcomingAlerts(); track entry.callsign + ':' + entry.summitCode) {
@@ -151,20 +151,14 @@
                     {{ entry.callsign }}
                   </span>
                   <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
-                  @if (hasDistance(entry) && entry.distanceKm !== null) {
-                    <span class="proximity-item__distance">{{ distanceLabel(entry.distanceKm) }}</span>
-                  } @else {
-                    <span class="proximity-item__distance proximity-item__distance--no-aprs">No APRS</span>
-                  }
+                  <span class="proximity-item__distance proximity-item__distance--no-aprs">No APRS</span>
                 </div>
-                <div class="proximity-item__bar">
-                  <div
-                    class="proximity-item__bar-fill"
-                    [class.proximity-item__bar-fill--no-aprs]="!entry.hasAprs"
-                    [style.width.%]="progressWidth(entry)">
+                <div class="proximity-item__timing">
+                  <div class="proximity-item__time-utc">{{ upcomingAlertTimeUtc(entry) }}</div>
+                  <div class="proximity-item__status" [ngClass]="upcomingRemainingClass(entry)">
+                    {{ upcomingRemainingLabel(entry) }}
                   </div>
                 </div>
-                <div class="proximity-item__status">{{ proximityStatus(entry) }}</div>
               </button>
             }
           </div>
@@ -205,10 +199,13 @@
   <!-- Legend (bottom-right, absolute inside map-wrap) -->
   <div class="map-legend">
     <div class="map-legend__title">Summit Points</div>
-    <div class="map-legend__gradient"></div>
-    <div class="map-legend__labels">
-      <span>1pt</span>
-      <span>10pt</span>
+    <div class="map-legend__sota-points">
+      <div class="map-legend__item"><span class="ldot" style="background:#4D7A20"></span>1 pt</div>
+      <div class="map-legend__item"><span class="ldot" style="background:#6DA536"></span>2 pt</div>
+      <div class="map-legend__item"><span class="ldot" style="background:#AEA727"></span>4 pt</div>
+      <div class="map-legend__item"><span class="ldot" style="background:#EFA818"></span>6 pt</div>
+      <div class="map-legend__item"><span class="ldot" style="background:#DC5D04"></span>8 pt</div>
+      <div class="map-legend__item"><span class="ldot" style="background:#C8101E"></span>10 pt</div>
     </div>
     <div class="map-legend__divider"></div>
     <div class="map-legend__title">Activators</div>
@@ -221,6 +218,9 @@
     <div class="map-legend__item"><span class="legend-line legend-line--alert"></span>Alert association</div>
     <div class="map-legend__item"><span class="legend-line legend-line--candidate"></span>Candidate</div>
     <div class="map-legend__item"><span class="legend-line legend-line--spot"></span>Recent spot</div>
-    <div class="map-legend__item"><span class="ldot" style="background:#9e9e9e"></span>Gray bar = no APRS</div>
+    <div class="map-legend__divider"></div>
+    <div class="map-legend__title">Indicators</div>
+    <div class="map-legend__item">🔔 Active alert on activator marker</div>
+    <div class="map-legend__item"><span class="legend-ring"></span>Summit glow = planned today (UTC)</div>
   </div>
 </div>

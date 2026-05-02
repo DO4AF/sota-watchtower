@@ -71,8 +71,8 @@ The app uses a **left sidebar** layout:
 - **Notified markers**: Green glow circle
 - **Walker traces**: Polylines showing historical positions (configurable hours)
 - **Quick Search overlay**: live summit/activator suggestions while typing; selecting a suggestion centers/zooms map
-- **Approaching panel**: right-side section for alerted activators with APRS within `<2 km` to alerted summit (proximity-focused)
-- **Upcoming Alerts panel**: right-side section listing all active alerts (including alerts with no APRS); no-APRS entries show a gray/disabled progress bar
+- **Alerted activators panel**: right-side section for alerted activators that have APRS (no distance cutoff), sorted by distance to alerted summit
+- **Upcoming Alerts panel**: right-side section for active alerts without APRS; rows show planned UTC alert time and time remaining/overdue (no proximity bar)
 - **Candidates panel**: right-side section for APRS-active activators without alert within `<2 km` to nearest summit
 - **Tactical mode**: toolbar toggle (Standard/Tactical) to reduce map to relevant summits only (alerted summits, recent-spotted summits, candidate-target summits)
 - **Tactical lines**: activator→summit association lines with source styles (alert=solid, candidate=dashed, spot=dotted) and age-based opacity fade
