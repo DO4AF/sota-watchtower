@@ -4,12 +4,6 @@
   @if (loading()) {
     <div class="config-loading">Loading configuration…</div>
   } @else {
-    <p-message
-      severity="info"
-      styleClass="propagation-warning"
-      text="ℹ Telegram credentials are read from DynamoDB at runtime — changes take effect immediately without redeployment."
-    />
-
     <form (ngSubmit)="save()" (keyup)="onFormChange()" (change)="onFormChange()">
       <!-- Telegram -->
       <p-card header="Telegram" styleClass="config-card">

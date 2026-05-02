@@ -1,155 +1,150 @@
+// ── Page shell ────────────────────────────────────────────────────────────────
 .alerts-page {
   height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--surface-bg);
-  padding: 1.5rem 1.5rem 0;
+  padding: 1.25rem 1.25rem 0;
+  background: var(--p-surface-950, #030712);
 }
 
+// ── Header ────────────────────────────────────────────────────────────────────
 .alerts-header {
-  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
   flex-shrink: 0;
 
-  h2 {
-    margin: 0 0 0.25rem;
-    font-size: 1.25rem;
+  &__title {
+    margin: 0 0 0.2rem;
+    font-size: 1.15rem;
     font-weight: 700;
-    color: var(--text-primary);
-    letter-spacing: -0.01em;
+    color: var(--p-text-color);
   }
 
-  p {
+  &__sub {
     margin: 0;
-    font-size: 0.8rem;
-    color: var(--text-muted);
+    font-size: 0.75rem;
+    color: var(--p-text-muted-color);
+  }
+
+  &__counts {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-shrink: 0;
   }
 }
 
-.alerts-card {
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+
+  &--warn { background: #f9e2af22; border: 1px solid #f9e2af66; color: #f9e2af; }
+  &--info { background: #89b4fa22; border: 1px solid #89b4fa66; color: #89b4fa; }
+}
+
+// ── Side-by-side row ──────────────────────────────────────────────────────────
+.tables-row {
+  display: flex;
   flex: 1;
   min-height: 0;
-  background: var(--surface-card);
-  border: 1px solid var(--surface-border);
-  border-radius: 12px 12px 0 0;
-  overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  display: flex;
-  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 0;
 }
 
-.table-toolbar {
+// ── Individual panel ──────────────────────────────────────────────────────────
+.table-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--p-surface-900);
+  border: 1px solid var(--p-surface-700);
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+}
+
+// ── Panel toolbar (title + search) ────────────────────────────────────────────
+.panel-toolbar {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--surface-border);
+  justify-content: space-between;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--p-surface-700);
   flex-shrink: 0;
 }
 
-.search-input {
-  width: 280px;
-  font-size: 0.85rem;
+.panel-title {
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--p-text-color);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+
+  i { font-size: 0.85rem; color: var(--p-primary-color); }
 }
 
-.result-count {
-  font-size: 0.78rem;
-  color: var(--text-muted);
+.panel-search {
+  width: 180px;
+  font-size: 0.8rem;
 }
 
+// ── Cell helpers ─────────────────────────────────────────────────────────────
 :host ::ng-deep {
-  .p-tabs {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-
-    .p-tablist {
-      padding: 0 1rem;
-      border-bottom: 1px solid var(--surface-border);
-      flex-shrink: 0;
-    }
-
-    .p-tab {
-      font-size: 0.875rem;
-      font-weight: 500;
-      padding: 0.85rem 1rem;
-    }
-
-    .p-tabpanels {
-      padding: 0;
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .p-tabpanel {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      padding: 0;
-    }
-  }
-
-  // Make the PrimeNG table fill remaining height and scroll
-  .p-datatable {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .p-datatable-wrapper {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    border-radius: 0;
-  }
-
-  .p-datatable-table {
-    width: 100%;
-  }
-
-  .callsign-cell {
-    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  .empty-cell {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--p-text-muted-color);
     font-size: 0.8rem;
-    font-weight: 600;
-    color: #63b3ed;
-    letter-spacing: 0.04em;
   }
 
-  .summit-cell {
-    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    letter-spacing: 0.02em;
-  }
-
-  .distance-cell {
+  .mono-cell {
     font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
     font-size: 0.78rem;
-    font-variant-numeric: tabular-nums;
+    color: var(--p-text-secondary-color, #a6adc8);
+    letter-spacing: 0.02em;
 
-    &--live {
-      color: #68d391;
-      font-weight: 600;
-    }
-
-    &--no-aprs {
-      color: var(--text-muted);
-    }
+    &--blue { color: #89b4fa; font-weight: 600; }
   }
 
-  .freq-cell {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
+  .dist-cell {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.76rem;
     font-variant-numeric: tabular-nums;
+
+    &--live { color: #a6e3a1; font-weight: 600; }
+    &--none { color: var(--p-text-muted-color); }
   }
 
   .time-cell {
     font-size: 0.75rem;
-    color: var(--text-muted);
+    color: var(--p-text-muted-color);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  // ── PrimeNG table tweaks ───────────────────────────────────────────────────
+  .p-datatable {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .p-datatable-header { display: none; } // hide built-in header if any
+
+  .p-paginator {
+    border-top: 1px solid var(--p-surface-700);
+    border-radius: 0;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+    flex-shrink: 0;
   }
 }
