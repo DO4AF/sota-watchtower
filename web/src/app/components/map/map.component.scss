@@ -93,6 +93,230 @@
   min-height: 0;
 }
 
+.map-overlay {
+  position: absolute;
+  z-index: 520;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+
+  &--left-top {
+    top: 10px;
+    left: 10px;
+    width: min(440px, calc(100% - 20px));
+  }
+
+  &--right-top {
+    top: 10px;
+    right: 10px;
+    width: min(360px, calc(100% - 20px));
+    max-height: calc(100% - 56px);
+    overflow: hidden;
+  }
+}
+
+.panel {
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--p-surface-900) 88%, transparent);
+  border: 1px solid var(--p-surface-600);
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+
+  &__title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--p-text-muted-color);
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+
+  &__empty {
+    font-size: 0.78rem;
+    color: var(--p-text-muted-color);
+  }
+}
+
+.panel--search {
+  max-height: min(380px, calc(100vh - 180px));
+  overflow: auto;
+}
+
+.search-box {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--p-surface-600);
+  border-radius: 8px;
+  background: var(--p-surface-800);
+  padding: 0 8px;
+  margin-bottom: 8px;
+
+  i {
+    color: var(--p-text-muted-color);
+    font-size: 0.78rem;
+  }
+
+  input {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--p-text-color);
+    padding: 8px 0;
+    font-size: 0.82rem;
+    outline: none;
+  }
+}
+
+.search-clear {
+  border: 0;
+  background: transparent;
+  color: var(--p-text-muted-color);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+
+  &:hover {
+    background: var(--p-surface-700);
+    color: var(--p-text-color);
+  }
+}
+
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.suggestion {
+  border: 1px solid var(--p-surface-600);
+  background: var(--p-surface-800);
+  border-radius: 8px;
+  padding: 8px;
+  text-align: left;
+  display: grid;
+  gap: 3px;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--p-primary-color);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--p-primary-color) 35%, transparent) inset;
+  }
+
+  &__title {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: var(--p-text-color);
+    font-weight: 700;
+  }
+
+  &__subtitle {
+    font-size: 0.76rem;
+    color: var(--p-text-muted-color);
+  }
+
+  &__type {
+    font-size: 0.68rem;
+    color: var(--p-primary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+}
+
+.proximity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.proximity-item {
+  width: 100%;
+  border: 1px solid var(--p-surface-600);
+  background: var(--p-surface-800);
+  border-radius: 8px;
+  padding: 8px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+
+  &:hover {
+    border-color: var(--p-primary-color);
+  }
+
+  &__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  &__callsign {
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--p-text-color);
+  }
+
+  &__distance {
+    font-size: 0.78rem;
+    color: var(--p-text-muted-color);
+  }
+
+  &__summit {
+    font-size: 0.74rem;
+    color: var(--p-text-muted-color);
+    margin: 4px 0 7px;
+  }
+
+  &__bar {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--p-surface-700);
+    overflow: hidden;
+  }
+
+  &__bar-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
+
+    &--candidate {
+      background: linear-gradient(90deg, #64748b, #38bdf8, #22c55e);
+    }
+  }
+}
+
+@media (max-width: 1200px) {
+  .map-overlay--right-top {
+    width: min(300px, calc(100% - 20px));
+  }
+}
+
+@media (max-width: 900px) {
+  .map-overlay--left-top,
+  .map-overlay--right-top {
+    position: static;
+    width: 100%;
+    max-height: none;
+  }
+
+  .map-wrap {
+    overflow: auto;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .leaflet-map {
+    min-height: 50vh;
+  }
+}
+
 // ─── Loading overlay ──────────────────────────────────────────────────────────
 
 .map-loading {

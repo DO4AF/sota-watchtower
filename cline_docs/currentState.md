@@ -18,6 +18,13 @@
 
 ## Recent Changes (2026-05-02)
 
+### Frontend — Map Search + Proximity Panels
+- **Quick Search panel added to Map view**: live suggestions while typing for both **summits** (code/name) and **activators** (callsign). Clicking a suggestion (or pressing Enter) centers and zooms the map to the selected target.
+- **Approaching activators panel added**: shows activators with an **active alert** whose current APRS position is **< 2 km** from their alerted summit.
+- **Candidates panel added**: shows APRS-active activators **without an active alert** when they are **< 2 km** from their nearest summit.
+- Both proximity panels include a **distance progress bar** indicating closeness to summit (0 km = full bar, 2 km = empty) and rows are clickable to focus the map.
+- Callsign matching between APRS and alerts is normalized (SSID-insensitive, e.g. `OE1ABC-7` ⇄ `OE1ABC`) to improve correlation.
+
 ### Frontend — Alerts Layout Fix
 - **Alerts view tables restored**: added explicit host flex sizing to `alerts.component.scss` (`:host { display:flex; flex-direction:column; flex:1; min-height:0; height:100%; }`).
 - This fixes a layout collapse where only the header row rendered and both table panels had zero height in `/alerts`.
@@ -72,5 +79,6 @@
 
 ## Known Issues / Notes
 - The `leaflet` npm package used by the map component is CommonJS (not ESM), causing a harmless Angular build warning.
+- Angular build emits a style budget warning for `map.component.scss` after adding map overlay panels; build still succeeds.
 - `AprsMonitorInstance` EC2: `Replacement: Conditional` in CloudFormation changeset — this is expected when UserData changes, but instance is not replaced unless `UpdateReplacePolicy` triggers it.
 - Distance column in Alerts tab requires both APRS position AND summit coordinates from the GeoJSON. If the GeoJSON hasn't loaded yet the column shows `?`; if no APRS data for the callsign it shows `—`.

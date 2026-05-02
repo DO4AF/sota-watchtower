@@ -118,6 +118,32 @@ interface ActivatorState {
   trace:     L.Polyline;
 }
 
+interface ActiveAlert {
+  callsign: string;
+  baseCallsign: string;
+  summit: string;
+}
+
+interface SearchSuggestion {
+  id: string;
+  type: 'summit' | 'activator';
+  title: string;
+  subtitle: string;
+  lat: number;
+  lon: number;
+  zoom: number;
+}
+
+interface ProximityEntry {
+  callsign: string;
+  summitCode: string;
+  summitName: string;
+  distanceKm: number;
+  progressPct: number;
+  activatorLat: number;
+  activatorLon: number;
+}
+
 // ─── Viewport pan/zoom debounce ───────────────────────────────────────────────
 
 /** How much to pad beyond the visible bounds when deciding which summits to render (fraction). */
@@ -150,6 +176,9 @@ export class MapComponent implements OnInit, OnDestroy {
   private labelLayer     = L.layerGroup();   // zoom-dependent summit labels
 
   private activators     = new Map<string, ActivatorState>();
+  private aprsByBaseCallsign = new Map<string, AprsPosition>();
+  private activeAlerts: ActiveAlert[] = [];
+  private summitByCode = new Map<string, SummitRecord>();
 
   /**
    * All summit data received from the API, held in memory.
@@ -176,6 +205,13 @@ export class MapComponent implements OnInit, OnDestroy {
   readonly summitCount        = signal(0);
   readonly activatorCount     = signal(0);
   readonly traceDurationHours = signal(2);
+  readonly searchSuggestions  = signal<SearchSuggestion[]>([]);
+  readonly alertedApproaching = signal<ProximityEntry[]>([]);
+  readonly candidatesApproaching = signal<ProximityEntry[]>([]);
+
+  searchQuery = '';
+
+  readonly APPROACHING_DISTANCE_KM = 2;
 
   readonly LABEL_ZOOM = 12;
 
@@ -227,6 +263,23 @@ export class MapComponent implements OnInit, OnDestroy {
       setTimeout(() => this.map.removeLayer(marker), 5000);
     }
     this.eventLog.info('Map', `Jumped to ${label ?? `${lat},${lon}`}`);
+  }
+
+  private focusMap(lat: number, lon: number, zoom = 14, label?: string): void {
+    if (!this.map) return;
+    this.map.setView([lat, lon], zoom, { animate: true });
+    if (label) {
+      const marker = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div class="jump-marker"><span>${label}</span></div>`,
+          iconSize: [80, 28],
+          iconAnchor: [40, 28],
+        }),
+        zIndexOffset: 2000,
+      }).addTo(this.map);
+      setTimeout(() => this.map.removeLayer(marker), 5000);
+    }
   }
 
   onMapReady(map: L.Map): void {
@@ -293,17 +346,38 @@ export class MapComponent implements OnInit, OnDestroy {
       alerts: alerts$ as any,
     }).subscribe({
       next: ({ alerts }) => {
-        // Build the set of upcoming-alert summit codes
+        // Build the set of currently active alerts
         const now       = Date.now();
-        const sevenDays = 7 * 24 * 3_600_000;
         this.alertedSummits.clear();
+        this.activeAlerts = [];
+
+        const isActiveAlert = (alert: Record<string, unknown>): boolean => {
+          const expiration = Number(alert['expiration']);
+          if (!Number.isNaN(expiration) && expiration > 0) {
+            // DynamoDB TTL values are in seconds
+            return expiration * 1000 > now;
+          }
+
+          const rawDate = String(alert['dateActivated'] ?? alert['date_activated'] ?? alert['activationDate'] ?? '');
+          if (!rawDate) return true;
+          const ts = new Date(rawDate).getTime();
+          if (Number.isNaN(ts)) return true;
+          // Keep a small grace period for slightly delayed data
+          return ts >= now - 6 * 3_600_000;
+        };
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (alerts as any[]).forEach(a => {
-          const rawDate = a.dateActivated ?? a.date_activated ?? a.activationDate ?? '';
-          const ts = rawDate ? new Date(rawDate).getTime() : NaN;
-          if (!isNaN(ts) && ts >= now - 3_600_000 && ts <= now + sevenDays) {
-            const code = String(a.summit ?? a.summitCode ?? '');
-            if (code) this.alertedSummits.add(code);
+          if (!isActiveAlert(a as Record<string, unknown>)) return;
+          const code = String(a.summit ?? a.summitCode ?? '');
+          const callsign = String(a.callsign ?? a.activatorCallsign ?? '');
+          if (code) this.alertedSummits.add(code);
+          if (callsign && code) {
+            this.activeAlerts.push({
+              callsign,
+              baseCallsign: this.normalizeCallsign(callsign),
+              summit: code,
+            });
           }
         });
 
@@ -333,8 +407,12 @@ export class MapComponent implements OnInit, OnDestroy {
           });
 
           this.summitCount.set(this.allSummits.length);
+          this.summitByCode.clear();
+          this.allSummits.forEach(s => this.summitByCode.set(s.code, s));
           this.loading.set(false);
           this.eventLog.success('Summits', `Loaded ${this.allSummits.length} summits`);
+          this.updateSearchSuggestions();
+          this.recomputeProximityPanels();
           this.updateViewport();
         }).catch(err => {
           this.eventLog.error('Summits', `Failed: ${err.message}`);
@@ -343,6 +421,7 @@ export class MapComponent implements OnInit, OnDestroy {
       },
       error: () => {
         // Even if alerts fail, still load summits
+        this.activeAlerts = [];
         loadGeojson().then(geojson => {
           this.allSummits = [];
           geojson.features.forEach(f => {
@@ -363,8 +442,12 @@ export class MapComponent implements OnInit, OnDestroy {
             });
           });
           this.summitCount.set(this.allSummits.length);
+          this.summitByCode.clear();
+          this.allSummits.forEach(s => this.summitByCode.set(s.code, s));
           this.loading.set(false);
           this.eventLog.success('Summits', `Loaded ${this.allSummits.length} summits`);
+          this.updateSearchSuggestions();
+          this.recomputeProximityPanels();
           this.updateViewport();
         }).catch(err => {
           this.eventLog.error('Summits', `Failed: ${err.message}`);
@@ -517,8 +600,11 @@ export class MapComponent implements OnInit, OnDestroy {
           }
         });
 
+        this.aprsByBaseCallsign.clear();
+
         positions.forEach(pos => {
           const cs        = pos.callsign;
+          const baseCs    = this.normalizeCallsign(cs);
           const freshness = activatorFreshness(pos.lastSeen);
           const latlng: L.LatLngExpression = [
             parseFloat(pos.latitude),
@@ -537,6 +623,8 @@ export class MapComponent implements OnInit, OnDestroy {
           }
 
           const popup = this.buildActivatorPopup(cs, pos, freshness, history.length);
+
+          this.aprsByBaseCallsign.set(baseCs, pos);
 
           if (this.activators.has(cs)) {
             const st = this.activators.get(cs)!;
@@ -580,10 +668,177 @@ export class MapComponent implements OnInit, OnDestroy {
         });
 
         this.activatorCount.set(this.activators.size);
+        this.updateSearchSuggestions();
+        this.recomputeProximityPanels();
         this.eventLog.success('APRS', `Refreshed — ${this.activators.size} activators active`);
       },
       error: err => this.eventLog.error('APRS', `Failed: ${err.message}`),
     });
+  }
+
+  onSearchInput(): void {
+    this.updateSearchSuggestions();
+  }
+
+  onSearchKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter') return;
+    const first = this.searchSuggestions()[0];
+    if (!first) return;
+    event.preventDefault();
+    this.selectSuggestion(first);
+  }
+
+  clearSearch(): void {
+    this.searchQuery = '';
+    this.searchSuggestions.set([]);
+  }
+
+  selectSuggestion(item: SearchSuggestion): void {
+    this.searchQuery = item.title;
+    this.searchSuggestions.set([]);
+    this.focusMap(item.lat, item.lon, item.zoom, item.title);
+  }
+
+  distanceLabel(km: number): string {
+    return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(2)} km`;
+  }
+
+  focusProximity(entry: ProximityEntry): void {
+    this.focusMap(entry.activatorLat, entry.activatorLon, 14, `${entry.callsign} → ${entry.summitCode}`);
+  }
+
+  private updateSearchSuggestions(): void {
+    const query = this.searchQuery.trim().toLowerCase();
+    if (!query) {
+      this.searchSuggestions.set([]);
+      return;
+    }
+
+    const summitSuggestions: SearchSuggestion[] = this.allSummits
+      .filter(s => s.code.toLowerCase().includes(query) || s.name.toLowerCase().includes(query))
+      .slice(0, 6)
+      .map(s => ({
+        id: `summit:${s.code}`,
+        type: 'summit' as const,
+        title: s.code,
+        subtitle: s.name,
+        lat: s.lat,
+        lon: s.lon,
+        zoom: 13,
+      }));
+
+    const activatorSuggestions: SearchSuggestion[] = Array.from(this.aprsByBaseCallsign.entries())
+      .filter(([base]) => base.toLowerCase().includes(query))
+      .slice(0, 6)
+      .map(([base, pos]) => ({
+        id: `activator:${base}`,
+        type: 'activator' as const,
+        title: pos.callsign,
+        subtitle: `Last seen ${activatorFreshness(pos.lastSeen).label}`,
+        lat: parseFloat(pos.latitude),
+        lon: parseFloat(pos.longitude),
+        zoom: 14,
+      }))
+      .filter(s => !Number.isNaN(s.lat) && !Number.isNaN(s.lon));
+
+    this.searchSuggestions.set([...summitSuggestions, ...activatorSuggestions].slice(0, 10));
+  }
+
+  private recomputeProximityPanels(): void {
+    if (!this.allSummits.length) {
+      this.alertedApproaching.set([]);
+      this.candidatesApproaching.set([]);
+      return;
+    }
+
+    const alertedEntries: ProximityEntry[] = [];
+    const seenKeys = new Set<string>();
+
+    this.activeAlerts.forEach(alert => {
+      const summit = this.summitByCode.get(alert.summit);
+      const aprs = this.aprsByBaseCallsign.get(alert.baseCallsign);
+      if (!summit || !aprs) return;
+
+      const activatorLat = parseFloat(aprs.latitude);
+      const activatorLon = parseFloat(aprs.longitude);
+      if (Number.isNaN(activatorLat) || Number.isNaN(activatorLon)) return;
+
+      const distanceKm = this.haversineKm(activatorLat, activatorLon, summit.lat, summit.lon);
+      if (distanceKm >= this.APPROACHING_DISTANCE_KM) return;
+
+      const key = `${alert.baseCallsign}:${summit.code}`;
+      if (seenKeys.has(key)) return;
+      seenKeys.add(key);
+
+      alertedEntries.push({
+        callsign: aprs.callsign,
+        summitCode: summit.code,
+        summitName: summit.name,
+        distanceKm,
+        progressPct: this.proximityPercent(distanceKm),
+        activatorLat,
+        activatorLon,
+      });
+    });
+
+    alertedEntries.sort((a, b) => a.distanceKm - b.distanceKm);
+
+    const alertedBases = new Set(this.activeAlerts.map(a => a.baseCallsign));
+    const candidateEntries: ProximityEntry[] = [];
+
+    this.aprsByBaseCallsign.forEach(aprs => {
+      const base = this.normalizeCallsign(aprs.callsign);
+      if (alertedBases.has(base)) return;
+
+      const activatorLat = parseFloat(aprs.latitude);
+      const activatorLon = parseFloat(aprs.longitude);
+      if (Number.isNaN(activatorLat) || Number.isNaN(activatorLon)) return;
+
+      let nearest: SummitRecord | undefined;
+      let nearestKm = Number.POSITIVE_INFINITY;
+
+      for (const summit of this.allSummits) {
+        const km = this.haversineKm(activatorLat, activatorLon, summit.lat, summit.lon);
+        if (km < nearestKm) {
+          nearestKm = km;
+          nearest = summit;
+        }
+      }
+
+      if (!nearest || nearestKm >= this.APPROACHING_DISTANCE_KM) return;
+
+      candidateEntries.push({
+        callsign: aprs.callsign,
+        summitCode: nearest.code,
+        summitName: nearest.name,
+        distanceKm: nearestKm,
+        progressPct: this.proximityPercent(nearestKm),
+        activatorLat,
+        activatorLon,
+      });
+    });
+
+    candidateEntries.sort((a, b) => a.distanceKm - b.distanceKm);
+    this.alertedApproaching.set(alertedEntries);
+    this.candidatesApproaching.set(candidateEntries);
+  }
+
+  private proximityPercent(distanceKm: number): number {
+    const ratio = 1 - distanceKm / this.APPROACHING_DISTANCE_KM;
+    return Math.max(0, Math.min(100, ratio * 100));
+  }
+
+  private normalizeCallsign(callsign: string): string {
+    return callsign.toUpperCase().replace(/-\d+$/, '');
+  }
+
+  private haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2
+      + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
   private buildActivatorPopup(

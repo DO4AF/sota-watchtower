@@ -44,6 +44,90 @@
       (leafletMapReady)="onMapReady($event)"
       class="leaflet-map">
     </div>
+
+    <div class="map-overlay map-overlay--left-top">
+      <div class="panel panel--search">
+        <div class="panel__title">Quick Search</div>
+        <div class="search-box">
+          <i class="pi pi-search"></i>
+          <input
+            type="text"
+            [(ngModel)]="searchQuery"
+            (input)="onSearchInput()"
+            (keydown)="onSearchKeydown($event)"
+            placeholder="Search summit code/name or activator callsign"
+            autocomplete="off"
+          />
+          @if (searchQuery) {
+            <button class="search-clear" type="button" (click)="clearSearch()">
+              <i class="pi pi-times"></i>
+            </button>
+          }
+        </div>
+
+        @if (searchQuery && searchSuggestions().length === 0) {
+          <div class="panel__empty">No matches</div>
+        }
+
+        @if (searchSuggestions().length > 0) {
+          <div class="suggestions">
+            @for (s of searchSuggestions(); track s.id) {
+              <button class="suggestion" type="button" (click)="selectSuggestion(s)">
+                <span class="suggestion__title">{{ s.title }}</span>
+                <span class="suggestion__subtitle">{{ s.subtitle }}</span>
+                <span class="suggestion__type">{{ s.type === 'summit' ? 'Summit' : 'Activator' }}</span>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="map-overlay map-overlay--right-top">
+      <div class="panel">
+        <div class="panel__title">Approaching (active alerts, &lt;2 km)</div>
+        @if (alertedApproaching().length === 0) {
+          <div class="panel__empty">No alerted activators currently within 2 km</div>
+        } @else {
+          <div class="proximity-list">
+            @for (entry of alertedApproaching(); track entry.callsign + ':' + entry.summitCode) {
+              <button class="proximity-item" type="button" (click)="focusProximity(entry)">
+                <div class="proximity-item__head">
+                  <span class="proximity-item__callsign">{{ entry.callsign }}</span>
+                  <span class="proximity-item__distance">{{ distanceLabel(entry.distanceKm) }}</span>
+                </div>
+                <div class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</div>
+                <div class="proximity-item__bar">
+                  <div class="proximity-item__bar-fill" [style.width.%]="entry.progressPct"></div>
+                </div>
+              </button>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="panel">
+        <div class="panel__title">Candidates (no alert, APRS active, &lt;2 km)</div>
+        @if (candidatesApproaching().length === 0) {
+          <div class="panel__empty">No nearby candidates currently</div>
+        } @else {
+          <div class="proximity-list">
+            @for (entry of candidatesApproaching(); track entry.callsign + ':' + entry.summitCode) {
+              <button class="proximity-item" type="button" (click)="focusProximity(entry)">
+                <div class="proximity-item__head">
+                  <span class="proximity-item__callsign">{{ entry.callsign }}</span>
+                  <span class="proximity-item__distance">{{ distanceLabel(entry.distanceKm) }}</span>
+                </div>
+                <div class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</div>
+                <div class="proximity-item__bar">
+                  <div class="proximity-item__bar-fill proximity-item__bar-fill--candidate" [style.width.%]="entry.progressPct"></div>
+                </div>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </div>
   </div>
 
   <!-- Legend (bottom-right, absolute inside map-wrap) -->

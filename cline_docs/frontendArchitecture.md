@@ -68,6 +68,8 @@ The app uses a **left sidebar** layout:
 - **Alert markers**: Orange glow circle
 - **Notified markers**: Green glow circle
 - **Walker traces**: Polylines showing historical positions (configurable hours)
+- **Quick Search overlay**: live summit/activator suggestions while typing; selecting a suggestion centers/zooms map
+- **Approaching panels**: right-side overlay sections for alerted activators (<2 km to alerted summit) and APRS-active candidates without alert (<2 km to nearest summit), including distance progress bars
 - **Debug log panel**: Toggleable side panel showing events
 - Refreshes APRS positions every 60 seconds
 
