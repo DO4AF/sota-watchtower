@@ -114,6 +114,36 @@
     width: min(360px, calc(100% - 20px));
     max-height: calc(100% - 56px);
     overflow: hidden;
+
+    .panel--approaching {
+      flex: 1 1 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+
+      .proximity-list {
+        flex: 1 1 0;
+        max-height: none;
+      }
+    }
+
+    .panel--candidates {
+      flex: 2 1 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+
+      .proximity-list {
+        flex: 1 1 0;
+        max-height: none;
+      }
+    }
+
+    .panel__empty,
+    .proximity-list {
+      min-height: 0;
+      overflow: auto;
+    }
   }
 }
 
@@ -250,10 +280,9 @@
     border-color: var(--p-primary-color);
   }
 
-  &__head {
+  &__meta {
     display: flex;
-    justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
   }
 
@@ -267,12 +296,17 @@
   &__distance {
     font-size: 0.78rem;
     color: var(--p-text-muted-color);
+    white-space: nowrap;
+    margin-left: auto;
   }
 
   &__summit {
     font-size: 0.74rem;
     color: var(--p-text-muted-color);
-    margin: 4px 0 7px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__bar {
@@ -280,6 +314,7 @@
     border-radius: 999px;
     background: var(--p-surface-700);
     overflow: hidden;
+    margin-top: 6px;
   }
 
   &__bar-fill {

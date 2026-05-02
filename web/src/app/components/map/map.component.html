@@ -84,7 +84,7 @@
     </div>
 
     <div class="map-overlay map-overlay--right-top">
-      <div class="panel">
+      <div class="panel panel--approaching">
         <div class="panel__title">Approaching (active alerts, &lt;2 km)</div>
         @if (alertedApproaching().length === 0) {
           <div class="panel__empty">No alerted activators currently within 2 km</div>
@@ -92,11 +92,11 @@
           <div class="proximity-list">
             @for (entry of alertedApproaching(); track entry.callsign + ':' + entry.summitCode) {
               <button class="proximity-item" type="button" (click)="focusProximity(entry)">
-                <div class="proximity-item__head">
+                <div class="proximity-item__meta">
                   <span class="proximity-item__callsign">{{ entry.callsign }}</span>
+                  <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
                   <span class="proximity-item__distance">{{ distanceLabel(entry.distanceKm) }}</span>
                 </div>
-                <div class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</div>
                 <div class="proximity-item__bar">
                   <div class="proximity-item__bar-fill" [style.width.%]="entry.progressPct"></div>
                 </div>
@@ -106,7 +106,7 @@
         }
       </div>
 
-      <div class="panel">
+      <div class="panel panel--candidates">
         <div class="panel__title">Candidates (no alert, APRS active, &lt;2 km)</div>
         @if (candidatesApproaching().length === 0) {
           <div class="panel__empty">No nearby candidates currently</div>
@@ -114,11 +114,11 @@
           <div class="proximity-list">
             @for (entry of candidatesApproaching(); track entry.callsign + ':' + entry.summitCode) {
               <button class="proximity-item" type="button" (click)="focusProximity(entry)">
-                <div class="proximity-item__head">
+                <div class="proximity-item__meta">
                   <span class="proximity-item__callsign">{{ entry.callsign }}</span>
+                  <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
                   <span class="proximity-item__distance">{{ distanceLabel(entry.distanceKm) }}</span>
                 </div>
-                <div class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</div>
                 <div class="proximity-item__bar">
                   <div class="proximity-item__bar-fill proximity-item__bar-fill--candidate" [style.width.%]="entry.progressPct"></div>
                 </div>
