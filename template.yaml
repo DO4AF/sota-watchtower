@@ -735,9 +735,12 @@ Resources:
       Environment:
         Variables:
           APRSPOSITIONSTABLE_TABLE_NAME: !Ref AprsPositionsTable
+          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref AprsPositionsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConfigTable
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup

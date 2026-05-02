@@ -18,6 +18,31 @@
 
 ## Recent Changes (2026-05-02)
 
+### Frontend/Auth — concrete fix for login hanging perception
+- Implemented a direct auth-flow fix in `web/src/app/services/auth.service.ts`:
+  - added timeout wrapper for Cognito calls (`signIn`, `getCurrentUser`) so login/session checks fail fast instead of waiting indefinitely on stalled network calls
+  - `signIn` timeout: 15s with explicit user-facing timeout error
+  - session check timeout: 8s
+  - added post-login guard fast-path: when local auth signal is already true, `checkSession()` returns immediately and avoids redundant immediate Cognito roundtrip during navigation guard evaluation
+- Verified build: `cd web && npx ng build --configuration production` ✅ (known warnings unchanged)
+- Verified current live config consistency via AWS CLI:
+  - CloudFormation Cognito outputs and Amplify app env vars now match
+  - latest Amplify job succeeded
+
+### Ops Debug — global APRS activator spread despite DM-only scope
+- Investigated live production behavior where map showed activators worldwide although `ConfigTable.sotaAssociations=["DM"]`.
+- Verified via AWS CLI:
+  - `ConfigTable` scope is DM-only (`sotaAssociations=["DM"]`, `sotaRegions=[]`).
+  - `AprsPositionsTable` contains many fresh positions outside DM (EU/NA/Asia/South America/Oceania), indicating ingest is effectively global.
+  - In recent data (`<=5 min`), the majority of packets were outside DM bbox.
+- Root-cause finding:
+  - EC2 APRS listener currently starts with default login callsign fallback `N0CALL` when `APRS_LOGIN_CALLSIGN` is not provided.
+  - Stack/UserData currently exports `CONFIGTABLE_TABLE_NAME` and `AWS_REGION`, but does **not** export APRS login credentials/passcode.
+  - This strongly indicates APRS-IS server-side filtering is not reliably enforced in live operation, resulting in broad/global packet ingest.
+- Recommended remediation:
+  - Provide proper APRS-IS login callsign (+ passcode if required) via environment for EC2 listener.
+  - Add a backend safety guard (scope validation before persisting APRS positions) so global packets are dropped even if listener filter fails.
+
 ### Backend/EC2/Frontend — APRS scope stability, config latency fix, and stale marker control
 - **APRS filter refresh behavior hardened**:
   - listener refresh interval reduced from 10 minutes to **120 seconds**

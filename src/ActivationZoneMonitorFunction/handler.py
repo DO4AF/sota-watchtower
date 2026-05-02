@@ -12,6 +12,94 @@ lambda_client = boto3.client('lambda')
 dynamodb = boto3.resource('dynamodb')
 
 
+def parse_json_list(raw):
+    if isinstance(raw, list):
+        return [str(v).strip() for v in raw if str(v).strip()]
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [str(v).strip() for v in parsed if str(v).strip()]
+    except Exception:
+        pass
+    return []
+
+
+def parse_json_dict(raw):
+    if isinstance(raw, dict):
+        return raw
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+    return {}
+
+
+def _normalize_bbox(raw_bbox):
+    if not isinstance(raw_bbox, dict):
+        return None
+    try:
+        lat_n = float(raw_bbox.get('latN'))
+        lon_w = float(raw_bbox.get('lonW'))
+        lat_s = float(raw_bbox.get('latS'))
+        lon_e = float(raw_bbox.get('lonE'))
+    except Exception:
+        return None
+
+    top = max(lat_n, lat_s)
+    bottom = min(lat_n, lat_s)
+    left = min(lon_w, lon_e)
+    right = max(lon_w, lon_e)
+    return {
+        'latN': top,
+        'latS': bottom,
+        'lonW': left,
+        'lonE': right,
+    }
+
+
+def build_scope_bboxes(config):
+    selected_associations = parse_json_list(config.get('sotaAssociations', ''))
+    selected_regions = parse_json_list(config.get('sotaRegions', ''))
+    association_options = parse_json_list(config.get('sotaAssociationOptions', ''))
+    area_by_association = parse_json_dict(config.get('sotaAprsAreaByAssociation', ''))
+    area_by_region = parse_json_dict(config.get('sotaAprsAreaByRegion', ''))
+
+    has_scope_selection = bool(selected_associations or selected_regions)
+
+    associations_to_use = selected_associations if selected_associations else association_options
+    bboxes = []
+    if selected_regions:
+        for region_key in selected_regions:
+            bbox = _normalize_bbox(area_by_region.get(region_key))
+            if bbox:
+                bboxes.append(bbox)
+    else:
+        for assoc in associations_to_use:
+            bbox = _normalize_bbox(area_by_association.get(assoc))
+            if bbox:
+                bboxes.append(bbox)
+
+    return bboxes, has_scope_selection
+
+
+def is_position_in_scope(latitude, longitude, bboxes):
+    if not bboxes:
+        return True
+    for bbox in bboxes:
+        if (
+            bbox['latS'] <= latitude <= bbox['latN']
+            and bbox['lonW'] <= longitude <= bbox['lonE']
+        ):
+            return True
+    return False
+
+
 def get_config():
     """Read runtime configuration from DynamoDB ConfigTable.
 
@@ -139,18 +227,35 @@ def handler(event, context):
     print(f"[INFO] Activation zone: {activation_distance_km*1000:.0f} m horizontal, "
           f"{activation_altitude_delta_m:.0f} m vertical")
 
-    # Get Alerts from SotaAlertsTable
-    upcoming_alerts = fetch_alerts()
     aprs_callsign = event.get('callsign')
     aprs_latitude = event.get('latitude')
     aprs_longitude = event.get('longitude')
     aprs_altitude = event.get('altitude')
+
+    try:
+        aprs_latitude_f = float(aprs_latitude)
+        aprs_longitude_f = float(aprs_longitude)
+    except Exception:
+        print(f"[WARNING] Invalid APRS coordinates for {aprs_callsign}: lat={aprs_latitude}, lon={aprs_longitude}")
+        return {}
+
+    scope_bboxes, has_scope_selection = build_scope_bboxes(config)
+    if has_scope_selection and not scope_bboxes:
+        print("[WARNING] Scope selected but no scope bboxes resolved; dropping APRS packet (fail-closed).")
+        return {}
+
+    if not is_position_in_scope(aprs_latitude_f, aprs_longitude_f, scope_bboxes):
+        print(f"[INFO] Dropping out-of-scope APRS position for {aprs_callsign}: lat={aprs_latitude_f}, lon={aprs_longitude_f}")
+        return {}
 
     print(f"APRS Callsign: {aprs_callsign}, APRS Latitude: {aprs_latitude}, "
           f"APRS Longitude: {aprs_longitude}, APRS Altitude: {aprs_altitude}")
 
     # Always store the APRS position for map display
     store_aprs_position(aprs_callsign, aprs_latitude, aprs_longitude, aprs_altitude)
+
+    # Get Alerts from SotaAlertsTable
+    upcoming_alerts = fetch_alerts()
 
     # Loop through all activations
     for alert in upcoming_alerts:
