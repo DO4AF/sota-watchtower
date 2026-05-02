@@ -935,9 +935,12 @@ Resources:
       Environment:
         Variables:
           CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
+          SUMMITS_TABLE_NAME: !Ref SummitsTable
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref SummitsTable
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup
