@@ -25,6 +25,8 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 }
 
 type GroupedAlert = SotaAlert & { _group: string };
+type SpotGroup = 'Last 30 min' | 'Last hour' | 'Last 5h' | 'Older';
+type GroupedSpot = SotaSpot & { _group: SpotGroup };
 
 type AlertGroup = 'Today' | 'Tomorrow' | 'Next 7 Days' | 'Next 14 Days' | 'Next 30 Days';
 
@@ -60,8 +62,8 @@ export class AlertsComponent implements OnInit, OnDestroy {
   showOnlyWithPosition = false;
   activeModeFilters    = new Set<string>();
 
-  readonly SPOT_HIGHLIGHT_WINDOW_MINUTES = 30;
-  readonly SPOT_MAX_AGE_HOURS = 6;
+  readonly SPOT_HIGHLIGHT_WINDOW_MINUTES = 10;
+  readonly SPOT_MAX_AGE_HOURS = 10;
   readonly ALERT_MAX_AGE_HOURS = 2;
   readonly ALERT_MAX_FUTURE_DAYS = 30;
   readonly ALERT_HIGHLIGHT_WINDOW_MINUTES = 60;  // ±1h from dateActivated → green highlight
@@ -428,6 +430,35 @@ export class AlertsComponent implements OnInit, OnDestroy {
         const callsignDelta = a.callsign.localeCompare(b.callsign);
         if (callsignDelta !== 0) return callsignDelta;
         return this.alertSummitRef(a).localeCompare(this.alertSummitRef(b));
+      });
+  }
+
+  spotGroup(spot: SotaSpot): SpotGroup {
+    const ts = this.spotTimeMs(spot);
+    if (ts === null) return 'Older';
+    const ageMs = Date.now() - ts;
+    if (ageMs < 30 * 60_000) return 'Last 30 min';
+    if (ageMs < 60 * 60_000) return 'Last hour';
+    if (ageMs < 5 * 3_600_000) return 'Last 5h';
+    return 'Older';
+  }
+
+  get groupedSpots(): GroupedSpot[] {
+    const order: Record<SpotGroup, number> = {
+      'Last 30 min': 0,
+      'Last hour': 1,
+      'Last 5h': 2,
+      'Older': 3,
+    };
+    return this.filteredSpots
+      .map(s => ({ ...s, _group: this.spotGroup(s) }))
+      .sort((a, b) => {
+        const groupDelta = order[a._group] - order[b._group];
+        if (groupDelta !== 0) return groupDelta;
+        // Within group: newest first (descending)
+        const aTs = this.spotTimeMs(a) ?? 0;
+        const bTs = this.spotTimeMs(b) ?? 0;
+        return bTs - aTs;
       });
   }
 

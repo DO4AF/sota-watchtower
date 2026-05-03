@@ -162,31 +162,35 @@
       </div>
 
       <p-table
-        [value]="filteredSpots"
+        [value]="groupedSpots"
         [loading]="spotsLoading()"
         [rowHover]="true"
-        [stripedRows]="true"
         [scrollable]="true"
         scrollHeight="flex"
-        sortField="time"
-        [sortOrder]="-1"
         styleClass="p-datatable-sm spots-table"
       >
         <ng-template #header>
           <tr>
-            <th pSortableColumn="time">Time (UTC) <p-sortIcon field="time" /></th>
-            <th pSortableColumn="callsign">Callsign <p-sortIcon field="callsign" /></th>
-            <th pSortableColumn="frequency">Frequency <p-sortIcon field="frequency" /></th>
-            <th pSortableColumn="mode">Mode <p-sortIcon field="mode" /></th>
-            <th pSortableColumn="summitRef">Summit Ref. <p-sortIcon field="summitRef" /></th>
-            <th pSortableColumn="summitName">Summit Name <p-sortIcon field="summitName" /></th>
-            <th pSortableColumn="altitude">Altitude <p-sortIcon field="altitude" /></th>
-            <th pSortableColumn="points">Points <p-sortIcon field="points" /></th>
-            <th pSortableColumn="postedBy">Posted By <p-sortIcon field="postedBy" /></th>
+            <th>Time (UTC)</th>
+            <th>Callsign</th>
+            <th>Frequency</th>
+            <th>Mode</th>
+            <th>Summit Ref.</th>
+            <th>Summit Name</th>
+            <th>Altitude</th>
+            <th>Points</th>
+            <th>Posted By</th>
             <th>Actions</th>
           </tr>
         </ng-template>
-        <ng-template #body let-spot>
+        <ng-template #body let-spot let-rowIndex="rowIndex">
+          @if (rowIndex === 0 || groupedSpots[rowIndex - 1]._group !== spot._group) {
+            <tr class="group-header-row">
+              <td colspan="10" class="group-header-cell">
+                <span class="group-header">{{ spot._group }}</span>
+              </td>
+            </tr>
+          }
           <tr [ngClass]="spotRowClass(spot)">
             <td><span class="time-cell">{{ spot.time | date:'HH:mm':'UTC' }}</span></td>
             <td>
