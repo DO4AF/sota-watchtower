@@ -174,6 +174,11 @@ interface RecentSpotLink {
   ageMin: number;
 }
 
+interface ProximityGroup {
+  label: string;
+  entries: ProximityEntry[];
+}
+
 // ─── Viewport pan/zoom debounce ───────────────────────────────────────────────
 
 /** How much to pad beyond the visible bounds when deciding which summits to render (fraction). */
@@ -507,8 +512,6 @@ export class MapComponent implements OnInit, OnDestroy {
     this.qrvCallsigns.clear();
 
     const todayUtc = new Date().toISOString().slice(0, 10);
-    // Tomorrow's UTC date string (for including next-day alerts in Upcoming panel)
-    const tomorrowUtc = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
 
     const alertDateKey = (alert: Record<string, unknown>): string | null => {
       const rawDate = String(alert['dateActivated'] ?? alert['date_activated'] ?? alert['activationDate'] ?? '');
@@ -530,11 +533,13 @@ export class MapComponent implements OnInit, OnDestroy {
       const alertTimeMs = this.parseAlertTimeMs(rawDate);
       if (alertTimeMs === null) return true; // keep visible when timestamp is missing/invalid
 
-      // Tomorrow's alerts are always shown (they are future by definition)
-      const alertDate = new Date(alertTimeMs).toISOString().slice(0, 10);
-      if (alertDate === tomorrowUtc) return true;
+      // Exclude alerts more than 30 days in the future
+      if (alertTimeMs > now + 30 * 24 * 60 * 60 * 1000) return false;
 
-      // Today's alerts: keep if not more than 60 minutes overdue
+      // Future alerts (tomorrow and beyond, up to 30 days): always shown
+      if (alertTimeMs > now) return true;
+
+      // Past/present alerts: keep if not more than 60 minutes overdue
       return alertTimeMs >= now - this.MAP_ALERT_MAX_OVERDUE_MINUTES * 60_000;
     };
 
@@ -888,6 +893,45 @@ export class MapComponent implements OnInit, OnDestroy {
     return entry.alertTimeMs >= Date.now()
       ? 'proximity-item__status--upcoming'
       : 'proximity-item__status--overdue';
+  }
+
+  /** Returns the temporal category label for a given alertTimeMs. */
+  private temporalCategoryForMs(alertTimeMs: number | null): string {
+    if (alertTimeMs === null) return 'Today';
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    const alertDay = new Date(alertTimeMs).toISOString().slice(0, 10);
+    if (alertDay === todayUtc) return 'Today';
+    const todayStartMs = new Date(todayUtc + 'T00:00:00Z').getTime();
+    const alertDayStartMs = new Date(alertDay + 'T00:00:00Z').getTime();
+    const diffDays = Math.round((alertDayStartMs - todayStartMs) / 86_400_000);
+    if (diffDays === 1) return 'Tomorrow';
+    if (diffDays <= 7) return 'Next 7 Days';
+    if (diffDays <= 14) return 'Next 14 Days';
+    return 'Next 30 Days';
+  }
+
+  /** Groups proximity entries by temporal category for display. */
+  private groupProximityEntries(entries: ProximityEntry[]): ProximityGroup[] {
+    const order = ['Today', 'Tomorrow', 'Next 7 Days', 'Next 14 Days', 'Next 30 Days'];
+    const map = new Map<string, ProximityEntry[]>();
+    entries.forEach(e => {
+      const label = this.temporalCategoryForMs(e.alertTimeMs);
+      if (!map.has(label)) map.set(label, []);
+      map.get(label)!.push(e);
+    });
+    return order
+      .filter(l => map.has(l))
+      .map(l => ({ label: l, entries: map.get(l)! }));
+  }
+
+  /** Alerted Activators (APRS) entries grouped by temporal category. */
+  get alertedApproachingGroups(): ProximityGroup[] {
+    return this.groupProximityEntries(this.alertedApproaching());
+  }
+
+  /** Upcoming Alerts (no APRS) entries grouped by temporal category. */
+  get upcomingAlertGroups(): ProximityGroup[] {
+    return this.groupProximityEntries(this.upcomingAlerts());
   }
 
   progressWidth(entry: ProximityEntry): number {

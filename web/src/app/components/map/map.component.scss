@@ -352,6 +352,24 @@
   overflow: auto;
 }
 
+// Temporal group header within a proximity panel (Today / Tomorrow / Next 7 Days …)
+.proximity-group-header {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--p-text-muted-color);
+  padding: 3px 2px 1px;
+  border-top: 1px solid var(--p-surface-700);
+  margin-top: 2px;
+
+  &:first-child {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+  }
+}
+
 .proximity-item {
   width: 100%;
   border: 1px solid var(--p-surface-600);
@@ -452,6 +470,25 @@
     font-size: 0.70rem;
     color: var(--p-text-muted-color);
   }
+}
+
+// ── Alerted Activators (APRS) item modifier ───────────────────────────────────
+// Makes __summit occupy only col 1 on row 2 (col 2 is reserved for distance).
+.proximity-item--alerted {
+  .proximity-item__summit {
+    grid-column: 1;  // only col 1 — not spanning to col 2
+  }
+}
+
+// Distance metric placed in column 2, row 2 (Alerted Activators items only).
+.proximity-item__metric--row2 {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 0.72rem;
+  color: var(--p-text-muted-color);
+  text-align: right;
+  white-space: nowrap;
+  align-self: baseline;
 }
 
 @media (max-width: 1200px) {

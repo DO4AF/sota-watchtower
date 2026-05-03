@@ -61,6 +61,7 @@ export class AlertsComponent implements OnInit, OnDestroy {
   readonly SPOT_HIGHLIGHT_WINDOW_MINUTES = 30;
   readonly SPOT_MAX_AGE_HOURS = 6;
   readonly ALERT_MAX_AGE_HOURS = 2;
+  readonly ALERT_MAX_FUTURE_DAYS = 30;
   readonly ALERT_HIGHLIGHT_WINDOW_MINUTES = 60;  // ±1h from dateActivated → green highlight
 
   // Status detection thresholds
@@ -359,10 +360,14 @@ export class AlertsComponent implements OnInit, OnDestroy {
     const q = this.alertFilter.trim().toLowerCase();
     const now = Date.now();
     const maxAgeMs = this.ALERT_MAX_AGE_HOURS * 3_600_000;
+    const maxFutureMs = this.ALERT_MAX_FUTURE_DAYS * 24 * 3_600_000;
     return this.alerts().filter(a => {
       // Age-out: hide alerts whose scheduled time was more than 2 hours ago
       const alertTs = this.alertTimeMs(a);
       if (alertTs !== null && (now - alertTs) > maxAgeMs) return false;
+
+      // Future-cutoff: hide alerts more than 30 days from now
+      if (alertTs !== null && alertTs > now + maxFutureMs) return false;
 
       if (this.showOnlyWithPosition && !this.lookupPosition(a.callsign)) return false;
       if (!q) return true;
@@ -372,13 +377,20 @@ export class AlertsComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Returns 'Today' if dateActivated falls on the current UTC day, otherwise 'Upcoming'. */
+  /** Returns the temporal group label for an alert: Today, Tomorrow, Next 7 Days, Next 14 Days, or Next 30 Days. */
   alertGroup(alert: SotaAlert): string {
     const ts = this.alertTimeMs(alert);
     if (ts === null) return 'Today';
     const todayUtc = new Date().toISOString().slice(0, 10);
     const alertDay = new Date(ts).toISOString().slice(0, 10);
-    return alertDay === todayUtc ? 'Today' : 'Upcoming';
+    if (alertDay === todayUtc) return 'Today';
+    const todayStartMs = new Date(todayUtc + 'T00:00:00Z').getTime();
+    const alertDayStartMs = new Date(alertDay + 'T00:00:00Z').getTime();
+    const diffDays = Math.round((alertDayStartMs - todayStartMs) / 86_400_000);
+    if (diffDays === 1) return 'Tomorrow';
+    if (diffDays <= 7) return 'Next 7 Days';
+    if (diffDays <= 14) return 'Next 14 Days';
+    return 'Next 30 Days';
   }
 
   /** filteredAlerts enriched with `_group` for PrimeNG row grouping. */

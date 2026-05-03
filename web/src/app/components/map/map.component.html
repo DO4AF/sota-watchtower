@@ -112,27 +112,36 @@
           <div class="panel__empty">No alerted activators with APRS currently</div>
         } @else {
           <div class="proximity-list">
-            @for (entry of alertedApproaching(); track entry.callsign + ':' + entry.summitCode) {
-              <button class="proximity-item" type="button" (click)="focusProximity(entry)">
-                <div class="proximity-item__meta">
-                  <span class="proximity-item__callsign">
-                    @if (callsignFlag(entry.callsign)) {
-                      <span class="callsign-flag">{{ callsignFlag(entry.callsign) }}</span>
+            @for (group of alertedApproachingGroups; track group.label) {
+              <div class="proximity-group-header">{{ group.label }}</div>
+              @for (entry of group.entries; track entry.callsign + ':' + entry.summitCode) {
+                <button class="proximity-item proximity-item--alerted" type="button" (click)="focusProximity(entry)">
+                  <div class="proximity-item__meta">
+                    <span class="proximity-item__callsign">
+                      @if (callsignFlag(entry.callsign)) {
+                        <span class="callsign-flag">{{ callsignFlag(entry.callsign) }}</span>
+                      }
+                      {{ entry.callsign }}
+                      @if (isQrvCallsign(entry.callsign)) {
+                        <span class="qrv-badge" title="Spotted on air today">QRV</span>
+                      }
+                    </span>
+                    <span class="proximity-item__metric" [ngClass]="upcomingRemainingClass(entry)">
+                      {{ upcomingRemainingLabel(entry) }}
+                    </span>
+                    <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
+                    @if (hasDistance(entry) && entry.distanceKm !== null) {
+                      <span class="proximity-item__metric proximity-item__metric--row2">{{ distanceLabel(entry.distanceKm) }}</span>
                     }
-                    {{ entry.callsign }}
-                    @if (isQrvCallsign(entry.callsign)) {
-                      <span class="qrv-badge" title="Spotted on air today">QRV</span>
-                    }
-                  </span>
-                  @if (hasDistance(entry) && entry.distanceKm !== null) {
-                    <span class="proximity-item__metric">{{ distanceLabel(entry.distanceKm) }}</span>
-                  }
-                  <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
-                </div>
-                <div class="proximity-item__bar">
-                  <div class="proximity-item__bar-fill" [style.width.%]="progressWidth(entry)"></div>
-                </div>
-              </button>
+                  </div>
+                  <div class="proximity-item__timing">
+                    <div class="proximity-item__time-utc">{{ upcomingAlertTimeUtc(entry) }}</div>
+                  </div>
+                  <div class="proximity-item__bar">
+                    <div class="proximity-item__bar-fill" [style.width.%]="progressWidth(entry)"></div>
+                  </div>
+                </button>
+              }
             }
           </div>
         }
@@ -141,30 +150,33 @@
       <div class="panel panel--upcoming-alerts">
         <div class="panel__title">Upcoming Alerts (no APRS)</div>
         @if (upcomingAlerts().length === 0) {
-          <div class="panel__empty">No upcoming alerts for today or tomorrow</div>
+          <div class="panel__empty">No upcoming alerts in the next 30 days</div>
         } @else {
           <div class="proximity-list">
-            @for (entry of upcomingAlerts(); track entry.callsign + ':' + entry.summitCode) {
-              <button class="proximity-item" type="button" (click)="focusProximity(entry)">
-                <div class="proximity-item__meta">
-                  <span class="proximity-item__callsign">
-                    @if (callsignFlag(entry.callsign)) {
-                      <span class="callsign-flag">{{ callsignFlag(entry.callsign) }}</span>
-                    }
-                    {{ entry.callsign }}
-                    @if (isQrvCallsign(entry.callsign)) {
-                      <span class="qrv-badge" title="Spotted on air today">QRV</span>
-                    }
-                  </span>
-                  <span class="proximity-item__metric" [ngClass]="upcomingRemainingClass(entry)">
-                    {{ upcomingRemainingLabel(entry) }}
-                  </span>
-                  <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
-                </div>
-                <div class="proximity-item__timing">
-                  <div class="proximity-item__time-utc">{{ upcomingAlertTimeUtc(entry) }}</div>
-                </div>
-              </button>
+            @for (group of upcomingAlertGroups; track group.label) {
+              <div class="proximity-group-header">{{ group.label }}</div>
+              @for (entry of group.entries; track entry.callsign + ':' + entry.summitCode) {
+                <button class="proximity-item" type="button" (click)="focusProximity(entry)">
+                  <div class="proximity-item__meta">
+                    <span class="proximity-item__callsign">
+                      @if (callsignFlag(entry.callsign)) {
+                        <span class="callsign-flag">{{ callsignFlag(entry.callsign) }}</span>
+                      }
+                      {{ entry.callsign }}
+                      @if (isQrvCallsign(entry.callsign)) {
+                        <span class="qrv-badge" title="Spotted on air today">QRV</span>
+                      }
+                    </span>
+                    <span class="proximity-item__metric" [ngClass]="upcomingRemainingClass(entry)">
+                      {{ upcomingRemainingLabel(entry) }}
+                    </span>
+                    <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
+                  </div>
+                  <div class="proximity-item__timing">
+                    <div class="proximity-item__time-utc">{{ upcomingAlertTimeUtc(entry) }}</div>
+                  </div>
+                </button>
+              }
             }
           </div>
         }
