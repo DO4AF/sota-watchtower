@@ -715,7 +715,7 @@ Resources:
     Properties:
       FunctionName: GetAprsPositionsFunction
       Description: !Sub
-        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ${ResourceName} From Stack ${AWS::StackName}
         - ResourceName: GetAprsPositionsFunction
       CodeUri: src/GetAprsPositionsFunction
       Handler: handler.handler
@@ -732,6 +732,15 @@ Resources:
             RestApiId: !Ref WatchtowerWebApi
             Auth:
               Authorizer: NONE
+        # Keep-warm ping every 5 minutes to eliminate cold-start latency (~800 ms).
+        # The handler returns immediately when event.warmup is truthy, so this
+        # costs ~1 ms of compute per invocation and stays well within the free tier.
+        KeepWarm:
+          Type: Schedule
+          Properties:
+            Schedule: rate(5 minutes)
+            Description: Keep GetAprsPositionsFunction warm to avoid cold starts
+            Input: '{"warmup": true}'
       Environment:
         Variables:
           APRSPOSITIONSTABLE_TABLE_NAME: !Ref AprsPositionsTable

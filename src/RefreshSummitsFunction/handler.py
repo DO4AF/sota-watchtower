@@ -1,10 +1,16 @@
 """
 RefreshSummitsFunction — downloads the SOTA summits database once per day,
 writes every currently-valid summit into SummitsTable (DynamoDB), and
-uploads a compact worldwide GeoJSON to S3 for direct frontend consumption.
+uploads summit GeoJSON files to S3 for direct frontend consumption.
 
-The S3 file (summits.json) contains ALL valid worldwide summits with minimal
-properties (summitCode, points, lat, lon) to keep the payload small.
+S3 layout:
+  summits.json               — full worldwide file (all associations, gzip)
+  summits/<ASSOC>.json       — per-association file, e.g. summits/DL.json (gzip)
+  summits-manifest.json      — list of available per-association file keys (plain JSON)
+
+The frontend loads only the per-association files it needs (configured in the
+user's association filter), downloading ~90% less data compared to the full file.
+The full summits.json is kept for backward compatibility.
 
 Triggered: EventBridge schedule cron(0 2 * * ? *)   [02:00 UTC daily]
 On-demand:  aws lambda invoke --function-name RefreshSummitsFunction /tmp/out.json
@@ -23,7 +29,7 @@ from datetime import datetime
 import boto3
 
 SOTA_CSV_URL = "https://storage.sota.org.uk/summitslist.csv"
-dynamodb = boto3.resource('dynamodb')
+dynamodb  = boto3.resource('dynamodb')
 s3_client = boto3.client('s3')
 
 
@@ -63,13 +69,35 @@ def parse_sota_date(raw_value: str) -> date | None:
         return None
 
 
+def _gzip_json(obj: dict | list) -> bytes:
+    """Serialize obj to compact JSON and gzip-compress it."""
+    body = json.dumps(obj, separators=(',', ':'))
+    buf  = io.BytesIO()
+    with gzip.GzipFile(fileobj=buf, mode='wb') as gz:
+        gz.write(body.encode('utf-8'))
+    return buf.getvalue()
+
+
+def _upload_gzip(bucket_name: str, key: str, compressed: bytes) -> int:
+    """Upload a gzip-compressed object to S3. Returns compressed size in bytes."""
+    s3_client.put_object(
+        Bucket=bucket_name,
+        Key=key,
+        Body=compressed,
+        ContentType='application/json',
+        ContentEncoding='gzip',
+        CacheControl='public, max-age=86400',   # cache for 24 h
+    )
+    return len(compressed)
+
+
 def handler(event, context):
-    table_name  = os.environ['SUMMITS_TABLE_NAME']
-    bucket_name = os.environ.get('SUMMITS_BUCKET_NAME')
+    table_name        = os.environ['SUMMITS_TABLE_NAME']
+    bucket_name       = os.environ.get('SUMMITS_BUCKET_NAME')
     config_table_name = os.environ.get('CONFIGTABLE_TABLE_NAME')
-    table = dynamodb.Table(table_name)
+    table        = dynamodb.Table(table_name)
     config_table = dynamodb.Table(config_table_name) if config_table_name else None
-    today = date.today()
+    today        = date.today()
 
     # ── Download CSV ──────────────────────────────────────────────────────────
     print(f"Downloading {SOTA_CSV_URL}")
@@ -96,11 +124,13 @@ def handler(event, context):
 
     written  = 0
     skipped  = 0
-    features = []   # for the S3 GeoJSON
-    associations = set()
-    regions_by_association = defaultdict(set)
-    bbox_by_association = defaultdict(make_bbox)
-    bbox_by_region = defaultdict(make_bbox)
+    features_all: list[dict] = []               # full worldwide set
+    features_by_assoc: dict[str, list[dict]] = defaultdict(list)  # per association
+
+    associations            = set()
+    regions_by_association  = defaultdict(set)
+    bbox_by_association     = defaultdict(make_bbox)
+    bbox_by_region          = defaultdict(make_bbox)
 
     with table.batch_writer() as batch:
         for row in reader:
@@ -173,29 +203,32 @@ def handler(event, context):
             })
             written += 1
 
-            # Accumulate feature for GeoJSON (minimal properties for small payload)
+            # Accumulate GeoJSON feature (minimal properties for small payload)
             try:
-                features.append({
+                feature = {
                     'type': 'Feature',
                     'geometry': {
                         'type':        'Point',
                         'coordinates': [round(lon_f, 5), round(lat_f, 5)],
                     },
                     'properties': {
-                        'c': summit_code,           # summitCode
-                        'n': peak_name,             # name
-                        'e': alt_m,                 # elevationM
-                        'p': points,                # points
-                        'a': assoc_name,            # associationName
-                        'r': region_name,           # region
+                        'c': summit_code,   # summitCode
+                        'n': peak_name,     # name
+                        'e': alt_m,         # elevationM
+                        'p': points,        # points
+                        'a': assoc_name,    # associationName
+                        'r': region_name,   # region
                     },
-                })
+                }
+                features_all.append(feature)
+                if association:
+                    features_by_assoc[association].append(feature)
             except (ValueError, TypeError):
                 pass  # skip bad coordinates for GeoJSON but already written to DDB
 
     print(f"RefreshSummits complete: {written} written, {skipped} skipped")
 
-    # ── Update dynamic config option catalog in ConfigTable ─────────────────────
+    # ── Update dynamic config option catalog in ConfigTable ──────────────────
     if config_table:
         assoc_options = sorted(a for a in associations if a)
         region_options = {
@@ -246,28 +279,63 @@ def handler(event, context):
     else:
         print("CONFIGTABLE_TABLE_NAME not set — skipping config option catalog refresh")
 
-    # ── Upload worldwide GeoJSON to S3 ────────────────────────────────────────
-    if bucket_name and features:
-        geojson = {'type': 'FeatureCollection', 'features': features}
-        body    = json.dumps(geojson, separators=(',', ':'))   # compact JSON
-
-        # Gzip compress
-        buf = io.BytesIO()
-        with gzip.GzipFile(fileobj=buf, mode='wb') as gz:
-            gz.write(body.encode('utf-8'))
-        compressed = buf.getvalue()
-
-        s3_client.put_object(
-            Bucket=bucket_name,
-            Key='summits.json',
-            Body=compressed,
-            ContentType='application/json',
-            ContentEncoding='gzip',
-            CacheControl='public, max-age=86400',   # cache for 24h
-        )
-        size_kb = len(compressed) // 1024
-        print(f"Uploaded summits.json to s3://{bucket_name} ({len(features)} features, {size_kb} KB gzipped)")
-    elif not bucket_name:
+    # ── Upload GeoJSON files to S3 ────────────────────────────────────────────
+    if not bucket_name:
         print("SUMMITS_BUCKET_NAME not set — skipping S3 upload")
+        return {'written': written, 'skipped': skipped, 'geojson_features': len(features_all)}
 
-    return {'written': written, 'skipped': skipped, 'geojson_features': len(features)}
+    if not features_all:
+        print("No features to upload")
+        return {'written': written, 'skipped': skipped, 'geojson_features': 0}
+
+    # 1. Full worldwide file (backward-compatible)
+    compressed_full = _gzip_json({'type': 'FeatureCollection', 'features': features_all})
+    _upload_gzip(bucket_name, 'summits.json', compressed_full)
+    print(
+        f"Uploaded summits.json to s3://{bucket_name} "
+        f"({len(features_all)} features, {len(compressed_full) // 1024} KB gzipped)"
+    )
+
+    # 2. Per-association files  (e.g. summits/DL.json)
+    #    The frontend downloads only the associations it is configured to monitor,
+    #    reducing the download by up to ~90% for typical single-country setups.
+    assoc_keys: list[str] = []
+    total_per_assoc_bytes = 0
+    for assoc_code, feat_list in sorted(features_by_assoc.items()):
+        if not assoc_code:
+            continue
+        s3_key = f"summits/{assoc_code}.json"
+        compressed = _gzip_json({'type': 'FeatureCollection', 'features': feat_list})
+        _upload_gzip(bucket_name, s3_key, compressed)
+        total_per_assoc_bytes += len(compressed)
+        assoc_keys.append(s3_key)
+
+    print(
+        f"Uploaded {len(assoc_keys)} per-association files to s3://{bucket_name}/summits/ "
+        f"(total {total_per_assoc_bytes // 1024} KB gzipped)"
+    )
+
+    # 3. Manifest file — plain JSON (tiny, not gzipped) listing available keys.
+    #    The frontend can use this to verify that per-association files exist
+    #    before falling back to the full file.
+    manifest = {
+        'generatedAt': datetime.utcnow().isoformat() + 'Z',
+        'totalFeatures': len(features_all),
+        'associations': sorted(features_by_assoc.keys()),
+        'keys': sorted(assoc_keys),
+    }
+    s3_client.put_object(
+        Bucket=bucket_name,
+        Key='summits-manifest.json',
+        Body=json.dumps(manifest, separators=(',', ':')).encode('utf-8'),
+        ContentType='application/json',
+        CacheControl='public, max-age=3600',   # manifest refreshes hourly
+    )
+    print(f"Uploaded summits-manifest.json ({len(manifest['associations'])} associations)")
+
+    return {
+        'written': written,
+        'skipped': skipped,
+        'geojson_features': len(features_all),
+        'per_assoc_files': len(assoc_keys),
+    }

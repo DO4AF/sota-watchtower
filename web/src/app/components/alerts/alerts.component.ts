@@ -10,8 +10,8 @@ import { InputIconModule } from 'primeng/inputicon';
 import { interval, Subscription, forkJoin } from 'rxjs';
 import { catchError, of } from 'rxjs';
 import { ApiService, SotaAlert, SotaSpot, AprsPosition } from '../../services/api.service';
+import { DataCacheService } from '../../services/data-cache.service';
 import { WebSocketService } from '../../services/websocket.service';
-import { environment } from '../../../environments/environment';
 import { getCallsignFlag } from '../../shared/callsign-flag.util';
 
 /** Haversine distance in km between two lat/lon points */
@@ -44,6 +44,7 @@ type GroupedAlert = SotaAlert & { _group: string };
 })
 export class AlertsComponent implements OnInit, OnDestroy {
   private apiService = inject(ApiService);
+  private cache      = inject(DataCacheService);
   private wsService  = inject(WebSocketService);
   private router     = inject(Router);
 
@@ -107,17 +108,38 @@ export class AlertsComponent implements OnInit, OnDestroy {
   }
 
   private loadAlertsAndPositions(): void {
-    const summitsUrl = (environment as { summitsUrl?: string }).summitsUrl ?? '';
-    const summitsPromise: Promise<GeoJSON.FeatureCollection> =
-      (summitsUrl && !summitsUrl.startsWith('${'))
-        ? fetch(summitsUrl).then(r => r.json() as Promise<GeoJSON.FeatureCollection>)
-        : new Promise<GeoJSON.FeatureCollection>((resolve, reject) =>
-            this.apiService.getSummits().subscribe({ next: resolve, error: reject })
-          );
+    // Load summits via the shared cache (IndexedDB → S3 per-assoc → S3 full → Lambda).
+    // We load associations from config to enable per-association file fetching.
+    const assocPromise: Promise<string[] | undefined> = this.apiService.getConfig()
+      .toPromise()
+      .then(cfg => {
+        if (!cfg) return undefined;
+        const raw = cfg['sotaAssociations'];
+        if (typeof raw === 'string' && raw.trim()) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length) return parsed as string[];
+          } catch { /* fall through */ }
+        }
+        return undefined;
+      })
+      .catch(() => undefined);
+
+    assocPromise.then(associations =>
+      this.cache.getSummits(associations)
+    ).then(geojson => {
+      this.summitCoordMap.clear();
+      geojson.features.forEach(f => {
+        const props  = f.properties as Record<string, unknown>;
+        const coords = (f.geometry as GeoJSON.Point).coordinates;
+        const code   = String(props['c'] ?? props['summitCode'] ?? '');
+        if (code) this.summitCoordMap.set(code, { lat: coords[1], lon: coords[0] });
+      });
+    }).catch(() => {});
 
     forkJoin({
-      alerts: this.apiService.getAlerts().pipe(catchError(() => of([] as SotaAlert[]))),
-      aprs:   this.apiService.getAprsPositions().pipe(catchError(() => of([] as AprsPosition[]))),
+      alerts: this.cache.getAlerts().pipe(catchError(() => of([] as SotaAlert[]))),
+      aprs:   this.cache.getAprsPositions().pipe(catchError(() => of([] as AprsPosition[]))),
     }).subscribe({
       next: ({ alerts, aprs }) => {
         this.alerts.set(alerts as SotaAlert[]);
@@ -133,21 +155,11 @@ export class AlertsComponent implements OnInit, OnDestroy {
       },
       error: () => this.alertsLoading.set(false),
     });
-
-    summitsPromise.then(geojson => {
-      this.summitCoordMap.clear();
-      geojson.features.forEach(f => {
-        const props  = f.properties as Record<string, unknown>;
-        const coords = (f.geometry as GeoJSON.Point).coordinates;
-        const code   = String(props['c'] ?? props['summitCode'] ?? '');
-        if (code) this.summitCoordMap.set(code, { lat: coords[1], lon: coords[0] });
-      });
-    }).catch(() => {});
   }
 
   private loadSpots(): void {
     this.spotsLoading.set(true);
-    this.apiService.getSpots().subscribe({
+    this.cache.getSpots(true).subscribe({
       next: data => {
         this.spots.set(data);
         this.spotsLoading.set(false);

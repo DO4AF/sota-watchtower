@@ -11,6 +11,7 @@ import { MessageModule } from 'primeng/message';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { ApiService, AppConfig } from '../../services/api.service';
+import { DataCacheService } from '../../services/data-cache.service';
 
 interface SelectOption {
   label: string;
@@ -81,7 +82,8 @@ function parseRegionsByAssociation(value: unknown): RegionsByAssociation {
   styleUrl: './config.component.scss',
 })
 export class ConfigComponent implements OnInit {
-  private apiService = inject(ApiService);
+  private apiService    = inject(ApiService);
+  private dataCache     = inject(DataCacheService);
   private messageService = inject(MessageService);
 
   associationOptions: SelectOption[] = [];
@@ -181,6 +183,9 @@ export class ConfigComponent implements OnInit {
         this.originalJson = this.toJson();
         this.hasChanges.set(false);
         this.saving.set(false);
+        // Invalidate the summits cache so that the next map/alerts load fetches
+        // the newly configured associations instead of returning stale cached data.
+        this.dataCache.invalidateSummitsCache();
         this.messageService.add({
           severity: 'success',
           summary: 'Saved',

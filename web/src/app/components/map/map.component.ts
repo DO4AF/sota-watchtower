@@ -13,9 +13,9 @@ import * as L from 'leaflet';
 import { forkJoin, interval, Subscription } from 'rxjs';
 import { catchError, of } from 'rxjs';
 import { ApiService, AprsPosition, SotaSpot } from '../../services/api.service';
+import { DataCacheService } from '../../services/data-cache.service';
 import { WebSocketService } from '../../services/websocket.service';
 import { EventLogService } from '../../services/event-log.service';
-import { environment } from '../../../environments/environment';
 import { getCallsignFlag } from '../../shared/callsign-flag.util';
 
 // ─── Summit point colors — exact SOTLAS color scheme ────────────────────────
@@ -190,6 +190,7 @@ const VIEWPORT_PAD = 0.5;
 })
 export class MapComponent implements OnInit, OnDestroy {
   private api      = inject(ApiService);
+  private cache    = inject(DataCacheService);
   private ws       = inject(WebSocketService);
   private eventLog = inject(EventLogService);
   private route    = inject(ActivatedRoute);
@@ -238,6 +239,8 @@ export class MapComponent implements OnInit, OnDestroy {
   // Subscriptions
   private refreshSub?: Subscription;
   private wsSub?:      Subscription;
+  private bgAprsRefreshSub?:   Subscription;
+  private bgAlertsRefreshSub?: Subscription;
 
   // Signals
   readonly loading            = signal(true);
@@ -349,6 +352,15 @@ export class MapComponent implements OnInit, OnDestroy {
     this.wsSub = this.ws.messages$.subscribe(msg =>
       this.eventLog.info('WebSocket', JSON.stringify(msg))
     );
+    // Subscribe to background-refresh results from the cache service so that
+    // stale-while-revalidate updates are reflected in the map without polling.
+    this.bgAprsRefreshSub = this.cache.onAprsRefresh$.subscribe(positions => {
+      this.processAprsPositions(positions);
+    });
+    this.bgAlertsRefreshSub = this.cache.onAlertsRefresh$.subscribe(_alerts => {
+      // Re-run dynamic context with fresh alerts — spots may be stale but still valid
+      this.refreshDynamicContext();
+    });
     map.on('zoomend moveend', () => this.scheduleViewportUpdate());
     this.eventLog.info('Map', 'Map ready');
   }
@@ -373,24 +385,25 @@ export class MapComponent implements OnInit, OnDestroy {
   private loadSummits(): void {
     // Fetch alerts/spots (failures are tolerated — summits should still render)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const alerts$ = this.api.getAlerts().pipe(catchError(() => of([] as any[])));
-    const spots$ = this.api.getSpots().pipe(catchError(() => of([] as SotaSpot[])));
+    const alerts$ = this.cache.getAlerts().pipe(catchError(() => of([] as any[])));
+    const spots$  = this.cache.getSpots().pipe(catchError(() => of([] as SotaSpot[])));
 
-    // Fetch summit GeoJSON: use S3 static file if env is set, else Lambda API
-    const summitsUrl = (environment as { summitsUrl?: string }).summitsUrl ?? '';
-
-    const loadGeojson = (): Promise<GeoJSON.FeatureCollection> => {
-      if (summitsUrl && !summitsUrl.startsWith('${')) {
-        // S3 path — browser decompresses gzip automatically via Content-Encoding header
-        return fetch(summitsUrl).then(r => {
-          if (!r.ok) throw new Error(`HTTP ${r.status} fetching ${summitsUrl}`);
-          return r.json() as Promise<GeoJSON.FeatureCollection>;
-        });
-      }
-      return new Promise((resolve, reject) => {
-        this.api.getSummits().subscribe({ next: resolve, error: reject });
-      });
-    };
+    // Load associations from config to enable per-association S3 file fetching.
+    // On failure (unauthenticated / network error) fall back to full summit file.
+    const assocPromise: Promise<string[] | undefined> = this.api.getConfig()
+      .toPromise()
+      .then(cfg => {
+        if (!cfg) return undefined;
+        const raw = cfg['sotaAssociations'];
+        if (typeof raw === 'string' && raw.trim()) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length) return parsed as string[];
+          } catch { /* fall through */ }
+        }
+        return undefined;
+      })
+      .catch(() => undefined);
 
     forkJoin({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -403,39 +416,11 @@ export class MapComponent implements OnInit, OnDestroy {
         // Refresh activator icons so alert badges reflect latest alert set immediately.
         this.loadActivators();
 
-        // Load summit GeoJSON (may come from S3 or Lambda)
-        loadGeojson().then(geojson => {
-          this.allSummits = [];
-          geojson.features.forEach(f => {
-            const props  = f.properties as Record<string, unknown>;
-            const coords = (f.geometry as GeoJSON.Point).coordinates;
-
-            // S3 uses compact keys (c=code, n=name, e=elevation, p=points, a=assoc, r=region)
-            // Lambda API uses full keys (summitCode, peakName, elevationM, etc.)
-            const code   = String(props['c'] ?? props['summitCode']      ?? '');
-            const name   = String(props['n'] ?? props['peakName']        ?? '');
-            const elev   = Number(props['e'] ?? props['elevationM']      ?? 0);
-            const assoc  = String(props['a'] ?? props['associationName'] ?? '');
-            const region = String(props['r'] ?? props['region']          ?? '');
-            const points = Number(props['p'] ?? props['points']          ?? 1);
-
-            this.allSummits.push({
-              code, name, elevationM: elev, assoc, region, points,
-              color:  summitColor(points),
-              radius: 5,
-              lat:    coords[1],
-              lon:    coords[0],
-            });
-          });
-
-          this.summitCount.set(this.allSummits.length);
-          this.summitByCode.clear();
-          this.allSummits.forEach(s => this.summitByCode.set(s.code, s));
-          this.loading.set(false);
-          this.eventLog.success('Summits', `Loaded ${this.allSummits.length} summits`);
-          this.updateSearchSuggestions();
-          this.recomputeProximityPanels();
-          this.updateViewport();
+        // Load summit GeoJSON via cache (IndexedDB → S3 per-assoc → S3 full → Lambda)
+        assocPromise.then(associations =>
+          this.cache.getSummits(associations)
+        ).then(geojson => {
+          this.parseSummitsGeojson(geojson);
         }).catch(err => {
           this.eventLog.error('Summits', `Failed: ${err.message}`);
           this.loading.set(false);
@@ -447,33 +432,8 @@ export class MapComponent implements OnInit, OnDestroy {
         this.activeAlerts = [];
         this.activeAlertBaseCallsigns.clear();
         this.recentSpotSummits.clear();
-        loadGeojson().then(geojson => {
-          this.allSummits = [];
-          geojson.features.forEach(f => {
-            const props  = f.properties as Record<string, unknown>;
-            const coords = (f.geometry as GeoJSON.Point).coordinates;
-            const code   = String(props['c'] ?? props['summitCode']      ?? '');
-            const name   = String(props['n'] ?? props['peakName']        ?? '');
-            const elev   = Number(props['e'] ?? props['elevationM']      ?? 0);
-            const assoc  = String(props['a'] ?? props['associationName'] ?? '');
-            const region = String(props['r'] ?? props['region']          ?? '');
-            const points = Number(props['p'] ?? props['points']          ?? 1);
-            this.allSummits.push({
-              code, name, elevationM: elev, assoc, region, points,
-              color:  summitColor(points),
-              radius: 5,
-              lat:    coords[1],
-              lon:    coords[0],
-            });
-          });
-          this.summitCount.set(this.allSummits.length);
-          this.summitByCode.clear();
-          this.allSummits.forEach(s => this.summitByCode.set(s.code, s));
-          this.loading.set(false);
-          this.eventLog.success('Summits', `Loaded ${this.allSummits.length} summits`);
-          this.updateSearchSuggestions();
-          this.recomputeProximityPanels();
-          this.updateViewport();
+        this.cache.getSummits().then(geojson => {
+          this.parseSummitsGeojson(geojson);
         }).catch(err => {
           this.eventLog.error('Summits', `Failed: ${err.message}`);
           this.loading.set(false);
@@ -482,10 +442,44 @@ export class MapComponent implements OnInit, OnDestroy {
     });
   }
 
+  private parseSummitsGeojson(geojson: GeoJSON.FeatureCollection): void {
+    this.allSummits = [];
+    geojson.features.forEach(f => {
+      const props  = f.properties as Record<string, unknown>;
+      const coords = (f.geometry as GeoJSON.Point).coordinates;
+
+      // S3 uses compact keys (c=code, n=name, e=elevation, p=points, a=assoc, r=region)
+      // Lambda API uses full keys (summitCode, peakName, elevationM, etc.)
+      const code   = String(props['c'] ?? props['summitCode']      ?? '');
+      const name   = String(props['n'] ?? props['peakName']        ?? '');
+      const elev   = Number(props['e'] ?? props['elevationM']      ?? 0);
+      const assoc  = String(props['a'] ?? props['associationName'] ?? '');
+      const region = String(props['r'] ?? props['region']          ?? '');
+      const points = Number(props['p'] ?? props['points']          ?? 1);
+
+      this.allSummits.push({
+        code, name, elevationM: elev, assoc, region, points,
+        color:  summitColor(points),
+        radius: 5,
+        lat:    coords[1],
+        lon:    coords[0],
+      });
+    });
+
+    this.summitCount.set(this.allSummits.length);
+    this.summitByCode.clear();
+    this.allSummits.forEach(s => this.summitByCode.set(s.code, s));
+    this.loading.set(false);
+    this.eventLog.success('Summits', `Loaded ${this.allSummits.length} summits`);
+    this.updateSearchSuggestions();
+    this.recomputeProximityPanels();
+    this.updateViewport();
+  }
+
   private refreshDynamicContext(): void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const alerts$ = this.api.getAlerts().pipe(catchError(() => of([] as any[])));
-    const spots$ = this.api.getSpots().pipe(catchError(() => of([] as SotaSpot[])));
+    const alerts$ = this.cache.getAlerts().pipe(catchError(() => of([] as any[])));
+    const spots$  = this.cache.getSpots().pipe(catchError(() => of([] as SotaSpot[])));
 
     forkJoin({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -730,8 +724,18 @@ export class MapComponent implements OnInit, OnDestroy {
   // ─── Activators ─────────────────────────────────────────────────────────
 
   private loadActivators(): void {
-    this.api.getAprsPositions().subscribe({
-      next: positions => {
+    this.cache.getAprsPositions().subscribe({
+      next: positions => this.processAprsPositions(positions),
+      error: err => this.eventLog.error('APRS', `Failed: ${err.message}`),
+    });
+  }
+
+  /**
+   * Process a batch of APRS positions — creates/updates activator markers and traces.
+   * Extracted so it can be called both from loadActivators() and from the background-
+   * refresh observable (cache.onAprsRefresh$) without code duplication.
+   */
+  private processAprsPositions(positions: AprsPosition[]): void {
         const cutoffMs = this.traceDurationHours() * 3_600_000;
         const now      = Date.now();
         const maxAgeMs = 6 * 3_600_000;
@@ -823,9 +827,6 @@ export class MapComponent implements OnInit, OnDestroy {
         this.updateSearchSuggestions();
         this.recomputeProximityPanels();
         this.eventLog.success('APRS', `Refreshed — ${this.activators.size} activators active (<=6h)`);
-      },
-      error: err => this.eventLog.error('APRS', `Failed: ${err.message}`),
-    });
   }
 
   onSearchInput(): void {
@@ -1339,6 +1340,8 @@ export class MapComponent implements OnInit, OnDestroy {
     if (this.viewportTimer) clearTimeout(this.viewportTimer);
     this.refreshSub?.unsubscribe();
     this.wsSub?.unsubscribe();
+    this.bgAprsRefreshSub?.unsubscribe();
+    this.bgAlertsRefreshSub?.unsubscribe();
     this.ws.disconnect();
   }
 }
