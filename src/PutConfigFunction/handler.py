@@ -9,9 +9,6 @@ CORS_HEADERS = {
 }
 
 ALLOWED_KEYS = {
-    'telegramBotToken',
-    'telegramGroupId',
-    'telegramUserId',
     'frequencyFilterPattern',
     'sotaAssociations',
     'sotaRegions',

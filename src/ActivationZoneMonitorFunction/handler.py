@@ -104,7 +104,6 @@ def get_config():
     """Read runtime configuration from DynamoDB ConfigTable.
 
     Returns a dict with at least:
-      - telegramGroupId
       - activationZoneDistanceMeters  (default: 300)
       - activationZoneAltitudeDeltaMeters (default: 25)
     """
@@ -174,24 +173,6 @@ def store_aprs_position(callsign, latitude, longitude, altitude):
     })
 
 
-def notify_telegram(chat_id, text):
-    """Invoke the TelegramNotifyFunction asynchronously."""
-    if not chat_id:
-        print(f"[WARNING] notify_telegram: no chat_id provided, skipping.")
-        return
-    response = lambda_client.invoke(
-        FunctionName=os.getenv('TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN'),
-        InvocationType='Event',
-        Payload=json.dumps(
-            {
-                'chat_id': chat_id,
-                'message': text
-            }
-        )
-    )
-    return response
-
-
 def mark_alert_as_notified(callsign, summit):
     """Mark alert as notified by adding the key 'notified' to the item."""
     table = dynamodb.Table(os.getenv('SOTAALERTSTABLE_TABLE_NAME'))
@@ -210,13 +191,8 @@ def mark_alert_as_notified(callsign, summit):
 
 
 def handler(event, context):
-    # Load runtime config (Telegram group, activation zone thresholds)
+    # Load runtime config (activation zone thresholds)
     config = get_config()
-
-    telegram_group_id = config.get(
-        'telegramGroupId',
-        os.getenv('TELEGRAM_GROUP_ID', '')
-    )
 
     # Activation zone — configurable via GUI, stored in DynamoDB
     # Distance threshold in km (stored as meters in config)
@@ -300,10 +276,7 @@ def handler(event, context):
                               f"the summit altitude — not in activation zone.")
                     else:
                         print("Walker is in the activation zone!")
-                        notify_telegram(
-                            telegram_group_id,
-                            f"🏔 {aprs_callsign} ist in der Aktivierungszone von {summit_code_file}!"
-                        )
+                        # TODO: implement notification dispatch (Telegram removed; new notification system TBD)
                         mark_alert_as_notified(alert_callsign, summit_code)
 
             break

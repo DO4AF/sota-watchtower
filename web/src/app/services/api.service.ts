@@ -63,9 +63,6 @@ export interface AprsPosition {
 }
 
 export interface AppConfig {
-  telegramBotToken: string;
-  telegramGroupId: string;
-  telegramUserId: string;
   frequencyFilterPattern: string;
   sotaAssociations: string;
   sotaRegions: string;

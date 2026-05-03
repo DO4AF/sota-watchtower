@@ -1,48 +1,9 @@
 import json
 import re
 import boto3, os
-from functools import lru_cache
 
 dynamodb = boto3.resource('dynamodb')
 
-def get_config():
-    """Read Telegram credentials from DynamoDB ConfigTable at runtime."""
-    table_name = os.environ.get('CONFIGTABLE_TABLE_NAME')
-    if not table_name:
-        # Fallback to env vars for backwards compatibility
-        return {
-            'telegramGroupId': os.getenv('TELEGRAM_GROUP_ID', ''),
-            'telegramUserId': os.getenv('TELEGRAM_USER_ID', ''),
-        }
-    table = dynamodb.Table(table_name)
-    response = table.scan()
-    items = response.get('Items', [])
-    config = {item['configKey']: item['configValue'] for item in items}
-    return config
-
-def send_telegram(chat_id, text):
-    if not chat_id:
-        print(f"[WARNING] No chat_id provided — skipping Telegram message")
-        return
-
-    # Create a Lambda client
-    client = boto3.client('lambda')
-
-    # Retrieve the Target Lambda ARN from environment variables
-    telegram_lambda_arn = os.environ['TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN']
-
-    # Invoke the Target Lambda function
-    response = client.invoke(
-        FunctionName=telegram_lambda_arn,
-        InvocationType='Event',
-        Payload=json.dumps(
-            {
-                'chat_id': chat_id,
-                'message': text
-            }
-        )
-    )
-    return response
 
 def get_aprs_ssid(s):
     # Define the regex pattern
@@ -58,13 +19,6 @@ def get_aprs_ssid(s):
         return None  # No match found
 
 def handler(event, context):
-
-    # Load config from DynamoDB (includes Telegram credentials)
-    config = get_config()
-    telegram_group_id = config.get('telegramGroupId', os.getenv('TELEGRAM_GROUP_ID', ''))
-    telegram_user_id  = config.get('telegramUserId',  os.getenv('TELEGRAM_USER_ID', ''))
-
-    print(f"[INFO] Telegram group_id={telegram_group_id!r} user_id={telegram_user_id!r}")
 
     # Extract and decode the 'body'
     body = event.get('body', '{}')
@@ -111,10 +65,7 @@ def handler(event, context):
     else:
         flag = ""
 
-    aprs_information = ""
     aprs_ssid = get_aprs_ssid(comment)
-    if aprs_ssid:
-        aprs_information = f"🗺️ <a href=\"https://aprs.fi/?call={aprs_ssid}&timerange=10800&tail=10800&others=1&z=19&mt=terrain\">Verfolge {full_callsign} auf APRS.fi</a>"
 
     # HTML-formatted message with variables
     message = f"""
@@ -122,21 +73,12 @@ def handler(event, context):
 🏔 {summit_name} {summit_height}m
 📻 {frequency} {mode}
 🏆 {spot_data['summitPoints']} Punkte
-{aprs_information}
 {comment}
 """
-    match_count = 0
 
-    if "SOTA2TELEGRAM_VHFUHF" in trigger_comment:
-        send_telegram(telegram_group_id, message)
-        match_count += 1
+    print(f"[INFO] HamAlert spot received: trigger={trigger_comment!r} callsign={full_callsign!r} summit={summit_ref!r}")
 
-    if "USER" in trigger_comment:
-        send_telegram(telegram_user_id, message)
-        match_count += 1
-
-    if match_count < 1:
-        send_telegram(telegram_user_id, "Invalid trigger comment " + trigger_comment + ". Check HamAlert config.")
+    # TODO: implement notification dispatch (Telegram removed; new notification system TBD)
 
     return {
         'statusCode': 200,

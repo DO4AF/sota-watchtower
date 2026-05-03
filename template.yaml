@@ -1,14 +1,5 @@
 Transform: AWS::Serverless-2016-10-31
 Parameters:
-  TelegramBotToken:
-    Description: Bot Token for Telegram
-    Type: String
-  TelegramUserChatId:
-    Description: User Chat ID for Telegram
-    Type: String
-  TelegramGroupChatId:
-    Description: Group Chat ID for Telegram
-    Type: String
   FrequencyFilterPattern:
     Description: Frequency pattern to filter Alerts
     Type: String
@@ -65,14 +56,8 @@ Resources:
             RestApiId: !Ref HamAlertApi
       Environment:
         Variables:
-          TELEGRAM_GROUP_ID: !Ref TelegramGroupChatId
-          TELEGRAM_USER_ID: !Ref TelegramUserChatId
-          TELEGRAMNOTIFYFUNCTION_FUNCTION_NAME: !Ref TelegramNotifyFunction
-          TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN: !GetAtt TelegramNotifyFunction.Arn
           CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
       Policies:
-        - LambdaInvokePolicy:
-            FunctionName: !Ref TelegramNotifyFunction
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigTable
       LoggingConfig:
@@ -123,59 +108,6 @@ Resources:
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup
-  DailyBriefingFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: DailyBriefingFunction
-      Description: !Sub
-        - Stack ${AWS::StackName} Function ${ResourceName}
-        - ResourceName: DailyBriefingFunction
-      CodeUri: src/DailyBriefingFunction
-      Handler: handler.handler
-      Runtime: python3.13
-      MemorySize: 3008
-      Timeout: 30
-      Tracing: Active
-      Environment:
-        Variables:
-          TELEGRAM_GROUP_ID: !Ref TelegramGroupChatId
-          GETSOTAALERTSFUNCTION_FUNCTION_NAME: !Ref GetSotaAlertsFunction
-          GETSOTAALERTSFUNCTION_FUNCTION_ARN: !GetAtt GetSotaAlertsFunction.Arn
-          TELEGRAMNOTIFYFUNCTION_FUNCTION_NAME: !Ref TelegramNotifyFunction
-          TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN: !GetAtt TelegramNotifyFunction.Arn
-      Policies:
-        - LambdaInvokePolicy:
-            FunctionName: !Ref GetSotaAlertsFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref TelegramNotifyFunction
-      LoggingConfig:
-        LogFormat: Text
-        LogGroup: !Ref SotaWatchtowerMasterLogGroup
-  TelegramNotifyFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: TelegramNotifyFunction
-      Description: !Sub
-        - Stack ${AWS::StackName} Function ${ResourceName}
-        - ResourceName: TelegramNotifyFunction
-      CodeUri: src/TelegramNotifyFunction
-      Handler: handler.handler
-      Runtime: python3.13
-      MemorySize: 3008
-      Timeout: 30
-      Tracing: Active
-      Layers:
-        - !Ref RequestsLayer
-      Environment:
-        Variables:
-          TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
-          CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref ConfigTable
-      LoggingConfig:
-        LogFormat: Text
-        LogGroup: !Ref SotaWatchtowerMasterLogGroup
   GetSotaSpotsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -215,15 +147,12 @@ Resources:
       Tracing: Active
       Environment:
         Variables:
-          TELEGRAM_GROUP_ID: !Ref TelegramGroupChatId
           GETSOTAALERTSFUNCTION_FUNCTION_NAME: !Ref GetSotaAlertsFunction
           GETSOTAALERTSFUNCTION_FUNCTION_ARN: !GetAtt GetSotaAlertsFunction.Arn
           GETSOTASPOTSFUNCTION_FUNCTION_NAME: !Ref GetSotaSpotsFunction
           GETSOTASPOTSFUNCTION_FUNCTION_ARN: !GetAtt GetSotaSpotsFunction.Arn
           SOTAALERTSTABLE_TABLE_NAME: !Ref SotaAlertsTable
           SOTAALERTSTABLE_TABLE_ARN: !GetAtt SotaAlertsTable.Arn
-          TELEGRAMNOTIFYFUNCTION_FUNCTION_NAME: !Ref TelegramNotifyFunction
-          TELEGRAMNOTIFYFUNCTION_FUNCTION_ARN: !GetAtt TelegramNotifyFunction.Arn
           WEBSOCKETBROADCASTFUNCTION_FUNCTION_ARN: !GetAtt WebSocketBroadcastFunction.Arn
           APRSPOSITIONSTABLE_TABLE_NAME: !Ref AprsPositionsTable
           CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
@@ -241,8 +170,6 @@ Resources:
             TableName: !Ref AprsPositionsTable
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigTable
-        - LambdaInvokePolicy:
-            FunctionName: !Ref TelegramNotifyFunction
         - LambdaInvokePolicy:
             FunctionName: !Ref WebSocketBroadcastFunction
       LoggingConfig:
@@ -1181,9 +1108,6 @@ Resources:
     Properties:
       ServiceToken: !GetAtt SeedConfigFunction.Arn
       ConfigTableName: !Ref ConfigTable
-      TelegramBotToken: !Ref TelegramBotToken
-      TelegramGroupId: !Ref TelegramGroupChatId
-      TelegramUserId: !Ref TelegramUserChatId
       FrequencyFilterPattern: !Ref FrequencyFilterPattern
       UserPoolId: !Ref WatchtowerUserPool
       AdminEmail: !Ref AdminEmail

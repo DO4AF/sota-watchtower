@@ -44,9 +44,6 @@ DESIRED_CUSTOM_RULES='[{"source":"</^((?!\\.(css|gif|ico|jpg|js|png|txt|svg|woff
 echo "==> Deploying SAM stack: $STACK_NAME"
 sam deploy \
   --parameter-overrides \
-    "TelegramBotToken=${TELEGRAM_BOT_TOKEN}" \
-    "TelegramUserChatId=${TELEGRAM_USER_CHAT_ID}" \
-    "TelegramGroupChatId=${TELEGRAM_GROUP_CHAT_ID}" \
     "FrequencyFilterPattern=${FREQUENCY_FILTER_PATTERN}" \
     "AdminEmail=${ADMIN_EMAIL}" \
     "AdminPassword=${ADMIN_PASSWORD}" \

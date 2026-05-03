@@ -5,43 +5,6 @@
     <div class="config-loading">Loading configuration…</div>
   } @else {
     <form (ngSubmit)="save()" (keyup)="onFormChange()" (change)="onFormChange()">
-      <!-- Telegram -->
-      <p-card header="Telegram" styleClass="config-card">
-        <div class="field">
-          <label for="botToken">Bot Token</label>
-          <p-password
-            inputId="botToken"
-            [(ngModel)]="telegramBotToken"
-            name="botToken"
-            [feedback]="false"
-            [toggleMask]="true"
-            styleClass="w-full"
-            inputStyleClass="w-full"
-            (ngModelChange)="onFormChange()"
-          />
-        </div>
-        <div class="field">
-          <label for="groupId">Group Chat ID</label>
-          <input
-            id="groupId"
-            pInputText
-            [(ngModel)]="telegramGroupId"
-            name="groupId"
-            class="w-full"
-          />
-        </div>
-        <div class="field">
-          <label for="userId">User Chat ID</label>
-          <input
-            id="userId"
-            pInputText
-            [(ngModel)]="telegramUserId"
-            name="userId"
-            class="w-full"
-          />
-        </div>
-      </p-card>
-
       <!-- Filters -->
       <p-card header="Filters" styleClass="config-card">
         <div class="field">

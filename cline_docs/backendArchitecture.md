@@ -18,8 +18,8 @@
   2. Stores position in AprsPositionsTable (with 2h TTL)
   3. Fetches all active SOTA alerts from SotaAlertsTable
   4. For each alert, checks if walker is within activation zone (distance + altitude)
-  5. If in zone and not yet notified → invokes TelegramNotifyFunction + marks alert as notified
-- **Env Vars**: SOTAALERTSTABLE_TABLE_NAME, APRSPOSITIONSTABLE_TABLE_NAME, TELEGRAM_GROUP_ID, LAMBDA_FUNCTION_NAME (TelegramNotify)
+  5. If in zone and not yet notified → marks alert as notified (notification dispatch TBD)
+- **Env Vars**: SOTAALERTSTABLE_TABLE_NAME, APRSPOSITIONSTABLE_TABLE_NAME, CONFIGTABLE_TABLE_NAME
 
 ### GetAprsPositionsFunction
 - **Trigger**: GET /aprs-positions (no Cognito auth)
@@ -37,7 +37,7 @@
 ### HamAlertProcessFunction
 - **Trigger**: POST /notify (HamAlertApi, no auth)
 - **Runtime**: Python 3.12
-- **Logic**: Parses HamAlert webhook, stores in SotaAlertsTable, invokes TelegramNotifyFunction
+- **Logic**: Parses HamAlert webhook and logs the spot. Notification dispatch TBD (Telegram removed).
 
 ### GetAlertsWebFunction / GetSpotsWebFunction
 - **Trigger**: GET /alerts, GET /spots (Cognito auth)
@@ -62,18 +62,8 @@
   - `sotaAssociations` must be non-empty
   - on scope change (`sotaAssociations` / `sotaRegions`), clears `AprsPositionsTable` so stale out-of-scope markers are dropped immediately
 - **Config Keys**:
-  - persisted user settings: `telegramBotToken`, `telegramGroupId`, `telegramUserId`, `frequencyFilterPattern`, `sotaAssociations`, `sotaRegions`, `activationZoneDistanceMeters`, `activationZoneAltitudeDeltaMeters`
+  - persisted user settings: `frequencyFilterPattern`, `sotaAssociations`, `sotaRegions`, `activationZoneDistanceMeters`, `activationZoneAltitudeDeltaMeters`
   - cached dynamic options/metadata (written by `RefreshSummitsFunction`): `sotaAssociationOptions`, `sotaRegionsByAssociation`, `sotaAprsAreaByAssociation`, `sotaAprsAreaByRegion`
-
-### TelegramNotifyFunction
-- **Trigger**: Lambda invoke (from other functions)
-- **Runtime**: Python 3.12
-- **Env Vars**: TELEGRAM_BOT_TOKEN, TELEGRAM_USER_CHAT_ID, TELEGRAM_GROUP_CHAT_ID
-
-### DailyBriefingFunction
-- **Trigger**: EventBridge schedule (morning)
-- **Runtime**: Python 3.12
-- **Logic**: Fetches upcoming SOTA alerts, formats and sends via Telegram
 
 ### SeedConfigFunction
 - **Trigger**: CloudFormation custom resource (on stack create)

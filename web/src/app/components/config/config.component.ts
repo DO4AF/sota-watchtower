@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
-import { PasswordModule } from 'primeng/password';
 import { SliderModule } from 'primeng/slider';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { MessageModule } from 'primeng/message';
@@ -71,7 +70,6 @@ function parseRegionsByAssociation(value: unknown): RegionsByAssociation {
     ButtonModule,
     CardModule,
     InputTextModule,
-    PasswordModule,
     SliderModule,
     MultiSelectModule,
     MessageModule,
@@ -95,11 +93,6 @@ export class ConfigComponent implements OnInit {
   hasChanges = signal(false);
   validationError = signal('');
 
-  // Telegram
-  telegramBotToken = '';
-  telegramGroupId = '';
-  telegramUserId = '';
-
   // Filters
   frequencyFilterPattern = '';
   selectedAssociations: string[] = [];
@@ -114,9 +107,6 @@ export class ConfigComponent implements OnInit {
   ngOnInit(): void {
     this.apiService.getConfig().subscribe({
       next: cfg => {
-        this.telegramBotToken = (cfg['telegramBotToken'] as string) ?? '';
-        this.telegramGroupId = (cfg['telegramGroupId'] as string) ?? '';
-        this.telegramUserId = (cfg['telegramUserId'] as string) ?? '';
         this.frequencyFilterPattern = (cfg['frequencyFilterPattern'] as string) ?? '';
 
         const associationValues = parseJsonArray(cfg['sotaAssociationOptions']);
@@ -169,9 +159,6 @@ export class ConfigComponent implements OnInit {
     }
     this.saving.set(true);
     const payload: AppConfig = {
-      telegramBotToken: this.telegramBotToken,
-      telegramGroupId: this.telegramGroupId,
-      telegramUserId: this.telegramUserId,
       frequencyFilterPattern: this.frequencyFilterPattern,
       sotaAssociations: JSON.stringify(this.selectedAssociations),
       sotaRegions: JSON.stringify(this.selectedRegions),
@@ -205,9 +192,6 @@ export class ConfigComponent implements OnInit {
 
   private toJson(): string {
     return JSON.stringify({
-      telegramBotToken: this.telegramBotToken,
-      telegramGroupId: this.telegramGroupId,
-      telegramUserId: this.telegramUserId,
       frequencyFilterPattern: this.frequencyFilterPattern,
       selectedAssociations: this.selectedAssociations,
       selectedRegions: this.selectedRegions,

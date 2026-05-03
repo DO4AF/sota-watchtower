@@ -34,9 +34,6 @@ def handler(event, context):
         dynamodb = boto3.resource('dynamodb')
         config_table = dynamodb.Table(props['ConfigTableName'])
         defaults = {
-            'telegramBotToken': props.get('TelegramBotToken', ''),
-            'telegramGroupId': props.get('TelegramGroupId', ''),
-            'telegramUserId': props.get('TelegramUserId', ''),
             'frequencyFilterPattern': props.get('FrequencyFilterPattern', ''),
             'sotaAssociations': json.dumps([]),
             'sotaRegions': json.dumps([]),

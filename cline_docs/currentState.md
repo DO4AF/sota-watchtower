@@ -1,22 +1,24 @@
 # Current State — SOTA Watchtower
 
-## Last updated: 2026-05-02
+## Last updated: 2026-05-03
 
 ## Status: Production — Live
 
 ---
 
-## Live URLs
-- **Web UI:** https://main.d1e96ec1sckzck.amplifyapp.com
-- **REST API:** https://s7l4613rp6.execute-api.eu-central-1.amazonaws.com/Prod
-- **WebSocket:** wss://393w4h7amb.execute-api.eu-central-1.amazonaws.com/Prod
-- **Summits GeoJSON (S3):** https://sota-watchtower-stack-summitsbucket-f4mxdd7k3poh.s3.eu-central-1.amazonaws.com/summits.json
-- **Cognito User Pool:** eu-central-1_7gp1Avnkp
-- **Cognito Client ID:** 2tbj9rhe1ds0ip7mse1h9vi0ej
+## Recent Changes (2026-05-03)
 
----
+### Refactor — Remove Telegram and Daily Briefing
+- Deleted `TelegramNotifyFunction` Lambda (handler + SAM resource).
+- Deleted `DailyBriefingFunction` Lambda (handler + SAM resource).
+- `HamAlertProcessFunction` now logs incoming spots but no longer dispatches notifications. Notification system to be re-added.
+- `ActivationZoneMonitorFunction` retains APRS position storage and zone detection; notification call replaced with `# TODO` placeholder.
+- Removed Telegram fields (`telegramBotToken`, `telegramGroupId`, `telegramUserId`) from `PutConfigFunction` allowlist, `SeedConfigFunction` defaults, and frontend `AppConfig` interface.
+- Removed Telegram config card from frontend Settings page.
+- Removed `TelegramBotToken`, `TelegramUserChatId`, `TelegramGroupChatId` SAM parameters from `template.yaml` and `deploy.sh`.
+- Removed Telegram env vars from `.env.example`.
+- Existing `telegramBotToken/Id` rows in `ConfigTable` DynamoDB are orphaned but harmless.
 
-## Recent Changes (2026-05-02)
 
 ### Frontend — Callsign flag prefix table expanded to full ITU allocation coverage
 - Reworked `web/src/app/shared/callsign-flag.util.ts` from a small static prefix list to a rule-based matcher supporting both:
@@ -275,9 +277,8 @@
 ## Architecture Summary
 
 ### AWS Stack: `sota-watchtower-stack` (eu-central-1)
-- **HamAlert API** — receives APRS spot webhooks from HamAlert
-- **ActivationZoneMonitorFunction** — main logic: checks if activator is within activation zone; reads thresholds from DynamoDB
-- **TelegramNotifyFunction** — sends Telegram messages; bot token read from DynamoDB
+- **HamAlert API** — receives APRS spot webhooks from HamAlert (notification dispatch TBD)
+- **ActivationZoneMonitorFunction** — main logic: checks if activator is within activation zone; reads thresholds from DynamoDB; notification dispatch TBD
 - **WebSocket API** — live push updates to browser clients
 - **Cognito** — authentication for the web UI
 - **Amplify** — hosts the Angular SPA (auto-builds on git push to `main`)
@@ -292,9 +293,6 @@
 | `WebSocketConnectionsTable` | PK=connectionId | Active WS clients |
 
 ### ConfigTable keys (configKey values)
-- `telegramBotToken` — Telegram bot token (read at runtime by TelegramNotifyFunction)
-- `telegramGroupId` — Telegram group chat ID
-- `telegramUserId` — Telegram user chat ID
 - `frequencyFilterPattern` — regex for filtering APRS spots by frequency
 - `sotaAssociations` — selected SOTA associations to monitor (empty = all cached options)
 - `sotaRegions` — optional selected regions (`ASSOC|RegionName`)
