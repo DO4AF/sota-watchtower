@@ -119,22 +119,7 @@
   font-size: 0.78rem;
 }
 
-// QRV badge — shown on alerts that have a matching spot today
-.qrv-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 0.35rem;
-  padding: 1px 6px;
-  border-radius: 999px;
-  border: 1px solid #a6e3a166;
-  background: #a6e3a122;
-  color: #a6e3a1;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  vertical-align: middle;
-  white-space: nowrap;
-}
+// QRV badge — REMOVED: QRV is now an integrated status state in the Status column
 
 // Mode filter chips
 
@@ -316,5 +301,10 @@
 
   .table-row--highlight > td {
     background: color-mix(in srgb, #22c55e 20%, var(--p-surface-900));
+  }
+
+  // En-route state: subtle blue tint
+  .table-row--highlight-subtle > td {
+    background: color-mix(in srgb, #89b4fa 10%, var(--p-surface-900));
   }
 }

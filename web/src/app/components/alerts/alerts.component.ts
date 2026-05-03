@@ -55,9 +55,14 @@ export class AlertsComponent implements OnInit, OnDestroy {
   showOnlyWithPosition = false;
   activeModeFilters    = new Set<string>();
 
-  readonly ALERT_HIGHLIGHT_WINDOW_MINUTES = 60;
   readonly SPOT_HIGHLIGHT_WINDOW_MINUTES = 30;
   readonly SPOT_MAX_AGE_HOURS = 6;
+  readonly ALERT_MAX_AGE_HOURS = 2;
+
+  // Status detection thresholds
+  readonly EN_ROUTE_DISTANCE_KM = 2;
+  readonly APRS_STALE_MINUTES = 30;
+  readonly APRS_FRESH_MINUTES = 5;
 
   private aprsMap       = new Map<string, AprsPosition>();
   private summitCoordMap = new Map<string, { lat: number; lon: number }>();
@@ -167,6 +172,51 @@ export class AlertsComponent implements OnInit, OnDestroy {
     return this.qrvCallsigns.has(base);
   }
 
+  // ── Status helpers ───────────────────────────────────────────────────────────
+
+  private aprsAgeMinutes(aprs: AprsPosition): number | null {
+    if (!aprs.lastSeen) return null;
+    const lastSeen = new Date(aprs.lastSeen.replace('Z', '+00:00')).getTime();
+    if (isNaN(lastSeen)) return null;
+    return (Date.now() - lastSeen) / 60_000;
+  }
+
+  getAlertStatus(alert: SotaAlert): 'planned' | 'en-route' | 'on-summit' | 'qrv' | 'departed' {
+    const aprs = this.lookupPosition(alert.callsign);
+    const aprsAge = aprs ? this.aprsAgeMinutes(aprs) : null;
+
+    // Departed: was on summit, APRS position now stale for >30 min
+    if (alert.notified && aprs && aprsAge !== null && aprsAge > this.APRS_STALE_MINUTES) {
+      return 'departed';
+    }
+
+    // QRV: spotted on air today (strongest confirmation of active operation)
+    if (this.isQrv(alert)) {
+      return 'qrv';
+    }
+
+    // On summit: activation zone reached and APRS is still fresh (or no APRS data)
+    if (alert.notified) {
+      return 'on-summit';
+    }
+
+    // En route: APRS shows activator approaching summit (within 2 km, recent fix)
+    if (aprs && aprsAge !== null && aprsAge <= this.APRS_FRESH_MINUTES) {
+      const summit = this.summitCoordMap.get(this.alertSummitRef(alert));
+      if (summit) {
+        const dist = haversineKm(
+          parseFloat(aprs.latitude), parseFloat(aprs.longitude),
+          summit.lat, summit.lon,
+        );
+        if (dist < this.EN_ROUTE_DISTANCE_KM) {
+          return 'en-route';
+        }
+      }
+    }
+
+    return 'planned';
+  }
+
   // ── Position helpers ────────────────────────────────────────────────────────
 
   private lookupPosition(callsign: string): AprsPosition | undefined {
@@ -274,7 +324,13 @@ export class AlertsComponent implements OnInit, OnDestroy {
 
   get filteredAlerts(): SotaAlert[] {
     const q = this.alertFilter.trim().toLowerCase();
+    const now = Date.now();
+    const maxAgeMs = this.ALERT_MAX_AGE_HOURS * 3_600_000;
     return this.alerts().filter(a => {
+      // Age-out: hide alerts whose scheduled time was more than 2 hours ago
+      const alertTs = this.alertTimeMs(a);
+      if (alertTs !== null && (now - alertTs) > maxAgeMs) return false;
+
       if (this.showOnlyWithPosition && !this.lookupPosition(a.callsign)) return false;
       if (!q) return true;
       return a.callsign.toLowerCase().includes(q)
@@ -334,18 +390,15 @@ export class AlertsComponent implements OnInit, OnDestroy {
     this.activeModeFilters = new Set(this.activeModeFilters);
   }
 
-  alertRowClass(alert: SotaAlert): string {    return this.isAlertInHighlightWindow(alert) ? 'table-row--highlight' : '';
+  alertRowClass(alert: SotaAlert): string {
+    const status = this.getAlertStatus(alert);
+    if (status === 'qrv' || status === 'on-summit') return 'table-row--highlight';
+    if (status === 'en-route') return 'table-row--highlight-subtle';
+    return '';
   }
 
   spotRowClass(spot: SotaSpot): string {
     return this.isSpotFresh(spot) ? 'table-row--highlight' : '';
-  }
-
-  private isAlertInHighlightWindow(alert: SotaAlert): boolean {
-    const ts = this.alertTimeMs(alert);
-    if (ts === null) return false;
-    const deltaMs = Math.abs(Date.now() - ts);
-    return deltaMs <= this.ALERT_HIGHLIGHT_WINDOW_MINUTES * 60_000;
   }
 
   private isSpotFresh(spot: SotaSpot): boolean {

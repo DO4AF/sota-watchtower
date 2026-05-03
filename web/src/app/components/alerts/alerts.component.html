@@ -92,13 +92,22 @@
               }
             </td>
             <td>
-              @if (alert.notified) {
-                <p-tag value="On summit" severity="success" icon="pi pi-map-marker" />
-              } @else {
-                <p-tag value="Planned" severity="warn" icon="pi pi-clock" />
-              }
-              @if (isQrv(alert)) {
-                <span class="qrv-badge" title="Spotted on air today">QRV</span>
+              @switch (getAlertStatus(alert)) {
+                @case ('departed') {
+                  <p-tag value="Departed" severity="secondary" icon="pi pi-sign-out" />
+                }
+                @case ('qrv') {
+                  <p-tag value="QRV" severity="success" icon="pi pi-wifi" />
+                }
+                @case ('on-summit') {
+                  <p-tag value="On summit" severity="success" icon="pi pi-map-marker" />
+                }
+                @case ('en-route') {
+                  <p-tag value="En route" severity="info" icon="pi pi-directions" />
+                }
+                @default {
+                  <p-tag value="Planned" severity="warn" icon="pi pi-clock" />
+                }
               }
             </td>
             <td class="action-cell">
