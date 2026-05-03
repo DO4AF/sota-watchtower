@@ -381,15 +381,22 @@ export class AlertsComponent implements OnInit, OnDestroy {
   alertGroup(alert: SotaAlert): string {
     const ts = this.alertTimeMs(alert);
     if (ts === null) return 'Today';
-    const todayUtc = new Date().toISOString().slice(0, 10);
-    const alertDay = new Date(ts).toISOString().slice(0, 10);
-    if (alertDay === todayUtc) return 'Today';
-    const todayStartMs = new Date(todayUtc + 'T00:00:00Z').getTime();
-    const alertDayStartMs = new Date(alertDay + 'T00:00:00Z').getTime();
-    const diffDays = Math.round((alertDayStartMs - todayStartMs) / 86_400_000);
-    if (diffDays === 1) return 'Tomorrow';
-    if (diffDays <= 7) return 'Next 7 Days';
-    if (diffDays <= 14) return 'Next 14 Days';
+
+    const now = new Date();
+    const startTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const dayMs = 86_400_000;
+    const startTomorrowUtc = startTodayUtc + dayMs;
+    const startDayAfterTomorrowUtc = startTodayUtc + 2 * dayMs;
+    const startDay8Utc = startTodayUtc + 8 * dayMs;
+    const startDay15Utc = startTodayUtc + 15 * dayMs;
+    const startDay31Utc = startTodayUtc + 31 * dayMs;
+
+    if (ts >= startTodayUtc && ts < startTomorrowUtc) return 'Today';
+    if (ts >= startTomorrowUtc && ts < startDayAfterTomorrowUtc) return 'Tomorrow';
+    if (ts >= startDayAfterTomorrowUtc && ts < startDay8Utc) return 'Next 7 Days';
+    if (ts >= startDay8Utc && ts < startDay15Utc) return 'Next 14 Days';
+    if (ts >= startDay15Utc && ts < startDay31Utc) return 'Next 30 Days';
+
     return 'Next 30 Days';
   }
 
