@@ -26,6 +26,8 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 
 type GroupedAlert = SotaAlert & { _group: string };
 
+type AlertGroup = 'Today' | 'Tomorrow' | 'Next 7 Days' | 'Next 14 Days' | 'Next 30 Days';
+
 @Component({
   selector: 'app-alerts',
   standalone: true,
@@ -76,6 +78,7 @@ export class AlertsComponent implements OnInit, OnDestroy {
   private qrvKeys = new Set<string>();
 
   private subs: Subscription[] = [];
+  readonly alertGroupOrder: AlertGroup[] = ['Today', 'Tomorrow', 'Next 7 Days', 'Next 14 Days', 'Next 30 Days'];
 
   ngOnInit(): void {
     this.loadAlertsAndPositions();
@@ -378,7 +381,7 @@ export class AlertsComponent implements OnInit, OnDestroy {
   }
 
   /** Returns the temporal group label for an alert: Today, Tomorrow, Next 7 Days, Next 14 Days, or Next 30 Days. */
-  alertGroup(alert: SotaAlert): string {
+  alertGroup(alert: SotaAlert): AlertGroup {
     const ts = this.alertTimeMs(alert);
     if (ts === null) return 'Today';
 
@@ -427,6 +430,10 @@ export class AlertsComponent implements OnInit, OnDestroy {
         if (callsignDelta !== 0) return callsignDelta;
         return this.alertSummitRef(a).localeCompare(this.alertSummitRef(b));
       });
+  }
+
+  alertsByGroup(group: AlertGroup): GroupedAlert[] {
+    return this.groupedAlerts.filter(a => a._group === group);
   }
 
   get filteredSpots(): SotaSpot[] {
