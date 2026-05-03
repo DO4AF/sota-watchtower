@@ -45,20 +45,18 @@
         [rowHover]="true"
         [scrollable]="true"
         scrollHeight="flex"
-        sortField="dateActivated"
-        [sortOrder]="1"
         rowGroupMode="subheader"
         groupRowsBy="_group"
         styleClass="p-datatable-sm alerts-table"
       >
         <ng-template #header>
           <tr>
-            <th pSortableColumn="dateActivated">Date/Time (UTC) <p-sortIcon field="dateActivated" /></th>
-            <th pSortableColumn="callsign">Callsign <p-sortIcon field="callsign" /></th>
-            <th pSortableColumn="summitRef">Summit Ref. <p-sortIcon field="summitRef" /></th>
-            <th pSortableColumn="summitName">Summit Name <p-sortIcon field="summitName" /></th>
-            <th pSortableColumn="altitude">Altitude <p-sortIcon field="altitude" /></th>
-            <th pSortableColumn="points">Points <p-sortIcon field="points" /></th>
+            <th>Date/Time (UTC)</th>
+            <th>Callsign</th>
+            <th>Summit Ref.</th>
+            <th>Summit Name</th>
+            <th>Altitude</th>
+            <th>Points</th>
             <th>Dist. to Summit</th>
             <th>Status</th>
             <th>Actions</th>
