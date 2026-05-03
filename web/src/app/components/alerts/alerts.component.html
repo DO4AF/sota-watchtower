@@ -45,8 +45,6 @@
         [rowHover]="true"
         [scrollable]="true"
         scrollHeight="flex"
-        rowGroupMode="subheader"
-        groupRowsBy="_group"
         styleClass="p-datatable-sm alerts-table"
       >
         <ng-template #header>
@@ -62,14 +60,14 @@
             <th>Actions</th>
           </tr>
         </ng-template>
-        <ng-template #groupheader let-alert>
-          <tr class="group-header-row">
-            <td colspan="9" class="group-header-cell">
-              <span class="group-header">{{ alert._group }}</span>
-            </td>
-          </tr>
-        </ng-template>
-        <ng-template #body let-alert>
+        <ng-template #body let-alert let-rowIndex="rowIndex">
+          @if (rowIndex === 0 || groupedAlerts[rowIndex - 1]._group !== alert._group) {
+            <tr class="group-header-row">
+              <td colspan="9" class="group-header-cell">
+                <span class="group-header">{{ alert._group }}</span>
+              </td>
+            </tr>
+          }
           <tr [ngClass]="alertRowClass(alert)">
             <td>
               <span class="time-cell">{{ alert.dateActivated | date:'yyyy-MM-dd HH:mm':'UTC' }}</span>
