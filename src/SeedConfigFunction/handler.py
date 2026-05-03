@@ -35,7 +35,7 @@ def handler(event, context):
         config_table = dynamodb.Table(props['ConfigTableName'])
         defaults = {
             'frequencyFilterPattern': props.get('FrequencyFilterPattern', ''),
-            'sotaAssociations': json.dumps([]),
+            'sotaAssociations': json.dumps(['DL', 'DM', 'OE']),
             'sotaRegions': json.dumps([]),
             'activationZoneDistanceMeters': '300',
             'activationZoneAltitudeDeltaMeters': '25',
