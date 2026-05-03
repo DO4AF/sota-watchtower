@@ -303,8 +303,18 @@
     background: color-mix(in srgb, #22c55e 20%, var(--p-surface-900));
   }
 
-  // En-route state: subtle blue tint
-  .table-row--highlight-subtle > td {
-    background: color-mix(in srgb, #89b4fa 10%, var(--p-surface-900));
+  // ── Row group header (Today / Upcoming) ───────────────────────────────────
+  .group-header-row > td {
+    background: var(--p-surface-800) !important;
+    border-top: 1px solid var(--p-surface-600) !important;
+    padding: 0.45rem 0.65rem !important;
+  }
+
+  .group-header {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--p-text-muted-color);
   }
 }

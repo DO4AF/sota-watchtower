@@ -24,6 +24,8 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+type GroupedAlert = SotaAlert & { _group: string };
+
 @Component({
   selector: 'app-alerts',
   standalone: true,
@@ -58,15 +60,18 @@ export class AlertsComponent implements OnInit, OnDestroy {
   readonly SPOT_HIGHLIGHT_WINDOW_MINUTES = 30;
   readonly SPOT_MAX_AGE_HOURS = 6;
   readonly ALERT_MAX_AGE_HOURS = 2;
+  readonly ALERT_HIGHLIGHT_WINDOW_MINUTES = 60;  // ±1h from dateActivated → green highlight
 
   // Status detection thresholds
   readonly EN_ROUTE_DISTANCE_KM = 2;
+  readonly DEPARTED_DISTANCE_KM = 0.5;  // >500m from summit after notified → departed
   readonly APRS_STALE_MINUTES = 30;
   readonly APRS_FRESH_MINUTES = 5;
 
   private aprsMap       = new Map<string, AprsPosition>();
   private summitCoordMap = new Map<string, { lat: number; lon: number }>();
-  private qrvCallsigns   = new Set<string>();   // normalized base callsigns spotted today (UTC)
+  /** Keys are "BASE_CALLSIGN|SUMMIT_REF" for spots on the current UTC day. */
+  private qrvKeys = new Set<string>();
 
   private subs: Subscription[] = [];
 
@@ -154,7 +159,7 @@ export class AlertsComponent implements OnInit, OnDestroy {
 
   private buildQrvSet(spots: SotaSpot[]): void {
     const todayUtc = new Date().toISOString().slice(0, 10);
-    this.qrvCallsigns.clear();
+    this.qrvKeys.clear();
     spots.forEach(s => {
       const ts = this.spotTimeMs(s);
       if (ts === null) return;
@@ -163,13 +168,16 @@ export class AlertsComponent implements OnInit, OnDestroy {
       const raw = this.spotCallsign(s);
       if (!raw) return;
       const base = raw.toUpperCase().replace(/\/[A-Z0-9]+$/i, '').replace(/-\d+$/, '');
-      this.qrvCallsigns.add(base);
+      const summit = (s.summitRef || s.summitCode || '').toUpperCase();
+      if (!summit) return;
+      this.qrvKeys.add(`${base}|${summit}`);
     });
   }
 
   isQrv(alert: SotaAlert): boolean {
     const base = alert.callsign.toUpperCase().replace(/\/[A-Z0-9]+$/i, '').replace(/-\d+$/, '');
-    return this.qrvCallsigns.has(base);
+    const summit = this.alertSummitRef(alert).toUpperCase();
+    return this.qrvKeys.has(`${base}|${summit}`);
   }
 
   // ── Status helpers ───────────────────────────────────────────────────────────
@@ -185,22 +193,35 @@ export class AlertsComponent implements OnInit, OnDestroy {
     const aprs = this.lookupPosition(alert.callsign);
     const aprsAge = aprs ? this.aprsAgeMinutes(aprs) : null;
 
-    // Departed: was on summit, APRS position now stale for >30 min
-    if (alert.notified && aprs && aprsAge !== null && aprsAge > this.APRS_STALE_MINUTES) {
-      return 'departed';
+    // Departed: only possible when APRS data exists AND activator reached summit
+    // Triggers when APRS is stale >30 min OR position moved >500m away from summit
+    if (alert.notified && aprs && aprsAge !== null) {
+      if (aprsAge > this.APRS_STALE_MINUTES) {
+        return 'departed';
+      }
+      const summit = this.summitCoordMap.get(this.alertSummitRef(alert));
+      if (summit) {
+        const dist = haversineKm(
+          parseFloat(aprs.latitude), parseFloat(aprs.longitude),
+          summit.lat, summit.lon,
+        );
+        if (dist > this.DEPARTED_DISTANCE_KM) {
+          return 'departed';
+        }
+      }
     }
 
-    // QRV: spotted on air today (strongest confirmation of active operation)
+    // QRV: spotted on this specific summit today — takes priority over on-summit
     if (this.isQrv(alert)) {
       return 'qrv';
     }
 
-    // On summit: activation zone reached and APRS is still fresh (or no APRS data)
+    // On summit: activation zone reached (notified=true), APRS fresh or no APRS data
     if (alert.notified) {
       return 'on-summit';
     }
 
-    // En route: APRS shows activator approaching summit (within 2 km, recent fix)
+    // En route: APRS shows activator within 2 km of summit with a recent fix (<5 min old)
     if (aprs && aprsAge !== null && aprsAge <= this.APRS_FRESH_MINUTES) {
       const summit = this.summitCoordMap.get(this.alertSummitRef(alert));
       if (summit) {
@@ -339,6 +360,20 @@ export class AlertsComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Returns 'Today' if dateActivated falls on the current UTC day, otherwise 'Upcoming'. */
+  alertGroup(alert: SotaAlert): string {
+    const ts = this.alertTimeMs(alert);
+    if (ts === null) return 'Today';
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    const alertDay = new Date(ts).toISOString().slice(0, 10);
+    return alertDay === todayUtc ? 'Today' : 'Upcoming';
+  }
+
+  /** filteredAlerts enriched with `_group` for PrimeNG row grouping. */
+  get groupedAlerts(): GroupedAlert[] {
+    return this.filteredAlerts.map(a => ({ ...a, _group: this.alertGroup(a) }));
+  }
+
   get filteredSpots(): SotaSpot[] {
     const q = this.spotFilter.trim().toLowerCase();
     const now = Date.now();
@@ -391,10 +426,10 @@ export class AlertsComponent implements OnInit, OnDestroy {
   }
 
   alertRowClass(alert: SotaAlert): string {
-    const status = this.getAlertStatus(alert);
-    if (status === 'qrv' || status === 'on-summit') return 'table-row--highlight';
-    if (status === 'en-route') return 'table-row--highlight-subtle';
-    return '';
+    const ts = this.alertTimeMs(alert);
+    if (ts === null) return '';
+    const deltaMs = Math.abs(Date.now() - ts);
+    return deltaMs <= this.ALERT_HIGHLIGHT_WINDOW_MINUTES * 60_000 ? 'table-row--highlight' : '';
   }
 
   spotRowClass(spot: SotaSpot): string {

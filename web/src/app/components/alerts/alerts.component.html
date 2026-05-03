@@ -40,14 +40,15 @@
       </div>
 
       <p-table
-        [value]="filteredAlerts"
+        [value]="groupedAlerts"
         [loading]="alertsLoading()"
         [rowHover]="true"
-        [stripedRows]="true"
         [scrollable]="true"
         scrollHeight="flex"
         sortField="dateActivated"
         [sortOrder]="1"
+        rowGroupMode="subheader"
+        groupRowsBy="_group"
         styleClass="p-datatable-sm alerts-table"
       >
         <ng-template #header>
@@ -59,8 +60,15 @@
             <th pSortableColumn="altitude">Altitude <p-sortIcon field="altitude" /></th>
             <th pSortableColumn="points">Points <p-sortIcon field="points" /></th>
             <th>Dist. to Summit</th>
-            <th pSortableColumn="notified">Status <p-sortIcon field="notified" /></th>
+            <th>Status</th>
             <th>Actions</th>
+          </tr>
+        </ng-template>
+        <ng-template #groupheader let-alert>
+          <tr class="group-header-row">
+            <td colspan="9" class="group-header-cell">
+              <span class="group-header">{{ alert._group }}</span>
+            </td>
           </tr>
         </ng-template>
         <ng-template #body let-alert>
