@@ -395,7 +395,31 @@ export class AlertsComponent implements OnInit, OnDestroy {
 
   /** filteredAlerts enriched with `_group` for PrimeNG row grouping. */
   get groupedAlerts(): GroupedAlert[] {
-    return this.filteredAlerts.map(a => ({ ...a, _group: this.alertGroup(a) }));
+    const order: Record<string, number> = {
+      'Today': 0,
+      'Tomorrow': 1,
+      'Next 7 Days': 2,
+      'Next 14 Days': 3,
+      'Next 30 Days': 4,
+    };
+
+    return this.filteredAlerts
+      .map(a => ({ ...a, _group: this.alertGroup(a) }))
+      .sort((a, b) => {
+        const groupDelta = (order[a._group] ?? 99) - (order[b._group] ?? 99);
+        if (groupDelta !== 0) return groupDelta;
+
+        const aTs = this.alertTimeMs(a);
+        const bTs = this.alertTimeMs(b);
+        if (aTs === null && bTs === null) return 0;
+        if (aTs === null) return 1;
+        if (bTs === null) return -1;
+        if (aTs !== bTs) return aTs - bTs;
+
+        const callsignDelta = a.callsign.localeCompare(b.callsign);
+        if (callsignDelta !== 0) return callsignDelta;
+        return this.alertSummitRef(a).localeCompare(this.alertSummitRef(b));
+      });
   }
 
   get filteredSpots(): SotaSpot[] {
