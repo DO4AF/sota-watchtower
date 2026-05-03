@@ -229,31 +229,6 @@
     white-space: nowrap;
   }
 
-  .action-cell {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    flex-wrap: nowrap;
-  }
-
-  .map-btn {
-    padding: 2px 6px;
-    border-radius: 4px;
-    border: 1px solid var(--p-surface-600);
-    background: transparent;
-    color: var(--p-text-muted-color);
-    font-size: 0.68rem;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.1s;
-
-    &:hover {
-      border-color: var(--p-primary-color);
-      background: var(--p-primary-50, #1e1e2e);
-      color: var(--p-primary-color);
-    }
-  }
-
   // ── PrimeNG scrollable table — the critical flex chain ────────────────────
   // p-table renders: .p-datatable > .p-datatable-wrapper > table
   // We need the wrapper to be the only element that scrolls.

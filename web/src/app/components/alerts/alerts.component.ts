@@ -1,7 +1,6 @@
 import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { InputTextModule } from 'primeng/inputtext';
@@ -50,7 +49,6 @@ export class AlertsComponent implements OnInit, OnDestroy {
   private apiService = inject(ApiService);
   private cache      = inject(DataCacheService);
   private wsService  = inject(WebSocketService);
-  private router     = inject(Router);
 
   alerts        = signal<SotaAlert[]>([]);
   spots         = signal<SotaSpot[]>([]);
@@ -269,18 +267,6 @@ export class AlertsComponent implements OnInit, OnDestroy {
     return !!this.lookupPosition(alert.callsign);
   }
 
-  getAlertPosition(alert: SotaAlert): AprsPosition | undefined {
-    return this.lookupPosition(alert.callsign);
-  }
-
-  getSpotActivatorPosition(callsign: string): AprsPosition | undefined {
-    return this.lookupPosition(callsign);
-  }
-
-  getSummitCoord(summitCode: string): { lat: number; lon: number } | undefined {
-    return this.summitCoordMap.get(summitCode);
-  }
-
   alertSummitRef(alert: SotaAlert): string {
     return alert.summitRef || alert.summit;
   }
@@ -317,45 +303,6 @@ export class AlertsComponent implements OnInit, OnDestroy {
 
   sotlasSummitUrl(summitCode: string): string {
     return `https://sotl.as/summits/${summitCode}`;
-  }
-
-  jumpToActivator(alert: SotaAlert): void {
-    const pos = this.getAlertPosition(alert);
-    if (!pos) return;
-    this.router.navigate(['/map'], {
-      queryParams: {
-        lat:  parseFloat(pos.latitude).toFixed(5),
-        lon:  parseFloat(pos.longitude).toFixed(5),
-        zoom: 14,
-        label: alert.callsign,
-      },
-    });
-  }
-
-  jumpToSpotActivator(callsign: string): void {
-    const pos = this.getSpotActivatorPosition(callsign);
-    if (!pos) return;
-    this.router.navigate(['/map'], {
-      queryParams: {
-        lat:  parseFloat(pos.latitude).toFixed(5),
-        lon:  parseFloat(pos.longitude).toFixed(5),
-        zoom: 14,
-        label: callsign,
-      },
-    });
-  }
-
-  jumpToSummit(summitCode: string): void {
-    const coord = this.getSummitCoord(summitCode);
-    if (!coord) return;
-    this.router.navigate(['/map'], {
-      queryParams: {
-        lat:  coord.lat.toFixed(5),
-        lon:  coord.lon.toFixed(5),
-        zoom: 14,
-        label: summitCode,
-      },
-    });
   }
 
   // ── Filtered data getters ───────────────────────────────────────────────────

@@ -57,13 +57,12 @@
             <th>Points</th>
             <th>Dist. to Summit</th>
             <th>Status</th>
-            <th>Actions</th>
           </tr>
         </ng-template>
         <ng-template #body let-alert let-rowIndex="rowIndex">
           @if (rowIndex === 0 || groupedAlerts[rowIndex - 1]._group !== alert._group) {
             <tr class="group-header-row">
-              <td colspan="9" class="group-header-cell">
+              <td colspan="8" class="group-header-cell">
                 <span class="group-header">{{ alert._group }}</span>
               </td>
             </tr>
@@ -114,22 +113,10 @@
                 }
               }
             </td>
-            <td class="action-cell">
-              @if (getAlertPosition(alert)) {
-                <button class="map-btn" (click)="jumpToActivator(alert)" title="Show activator on map">
-                  🗺️ Activator
-                </button>
-              }
-              @if (getSummitCoord(alertSummitRef(alert))) {
-                <button class="map-btn" (click)="jumpToSummit(alertSummitRef(alert))" title="Show summit on map">
-                  🏔️ Summit
-                </button>
-              }
-            </td>
           </tr>
         </ng-template>
         <ng-template #emptymessage>
-          <tr><td colspan="9" class="empty-cell">No active alerts</td></tr>
+          <tr><td colspan="8" class="empty-cell">No active alerts</td></tr>
         </ng-template>
       </p-table>
     </div>
@@ -180,13 +167,12 @@
             <th>Altitude</th>
             <th>Points</th>
             <th>Posted By</th>
-            <th>Actions</th>
           </tr>
         </ng-template>
         <ng-template #body let-spot let-rowIndex="rowIndex">
           @if (rowIndex === 0 || groupedSpots[rowIndex - 1]._group !== spot._group) {
             <tr class="group-header-row">
-              <td colspan="10" class="group-header-cell">
+              <td colspan="9" class="group-header-cell">
                 <span class="group-header">{{ spot._group }}</span>
               </td>
             </tr>
@@ -217,22 +203,10 @@
               }
               {{ spot.postedBy || '—' }}
             </td>
-            <td class="action-cell">
-              @if (getSpotActivatorPosition(spotCallsign(spot))) {
-                <button class="map-btn" (click)="jumpToSpotActivator(spotCallsign(spot))" title="Show activator on map">
-                  🗺️ Activator
-                </button>
-              }
-              @if (getSummitCoord(spotSummitRef(spot))) {
-                <button class="map-btn" (click)="jumpToSummit(spotSummitRef(spot))" title="Show summit on map">
-                  🏔️ Summit
-                </button>
-              }
-            </td>
           </tr>
         </ng-template>
         <ng-template #emptymessage>
-          <tr><td colspan="10" class="empty-cell">No recent spots</td></tr>
+          <tr><td colspan="9" class="empty-cell">No recent spots</td></tr>
         </ng-template>
       </p-table>
     </div>
