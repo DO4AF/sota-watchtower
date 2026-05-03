@@ -41,6 +41,9 @@ aws amplify get-branch --app-id "$AMPLIFY_APP_ID" --branch-name "$AMPLIFY_BRANCH
 
 DESIRED_CUSTOM_RULES='[{"source":"</^((?!\\.(css|gif|ico|jpg|js|png|txt|svg|woff|ttf|map|json)$).)*$/>","target":"/index.html","status":"200"}]'
 
+echo "==> Building SAM application..."
+sam build
+
 echo "==> Deploying SAM stack: $STACK_NAME"
 sam deploy \
   --parameter-overrides \
