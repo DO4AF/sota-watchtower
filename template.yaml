@@ -656,9 +656,9 @@ Resources:
       RestApiId: !Ref WatchtowerWebApi
       ResponseType: DEFAULT_4XX
       ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Authorization,Content-Type'''
+        gatewayresponse.header.Access-Control-Allow-Methods: '''GET,PUT,OPTIONS'''
 
   WatchtowerWebApiGatewayResponseDefault5xx:
     Type: AWS::ApiGateway::GatewayResponse
@@ -666,9 +666,9 @@ Resources:
       RestApiId: !Ref WatchtowerWebApi
       ResponseType: DEFAULT_5XX
       ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Authorization,Content-Type'''
+        gatewayresponse.header.Access-Control-Allow-Methods: '''GET,PUT,OPTIONS'''
 
   WatchtowerWebApiGatewayResponseUnauthorized:
     Type: AWS::ApiGateway::GatewayResponse
@@ -676,9 +676,9 @@ Resources:
       RestApiId: !Ref WatchtowerWebApi
       ResponseType: UNAUTHORIZED
       ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Authorization,Content-Type'''
+        gatewayresponse.header.Access-Control-Allow-Methods: '''GET,PUT,OPTIONS'''
 
   WatchtowerWebApiGatewayResponseAccessDenied:
     Type: AWS::ApiGateway::GatewayResponse
@@ -686,9 +686,9 @@ Resources:
       RestApiId: !Ref WatchtowerWebApi
       ResponseType: ACCESS_DENIED
       ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Authorization,Content-Type'''
+        gatewayresponse.header.Access-Control-Allow-Methods: '''GET,PUT,OPTIONS'''
 
   WatchtowerWebApiGatewayResponseIntegrationTimeout:
     Type: AWS::ApiGateway::GatewayResponse
@@ -696,9 +696,9 @@ Resources:
       RestApiId: !Ref WatchtowerWebApi
       ResponseType: INTEGRATION_TIMEOUT
       ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Authorization,Content-Type'''
+        gatewayresponse.header.Access-Control-Allow-Methods: '''GET,PUT,OPTIONS'''
 
   WatchtowerWebApiGatewayResponseIntegrationFailure:
     Type: AWS::ApiGateway::GatewayResponse
@@ -706,9 +706,9 @@ Resources:
       RestApiId: !Ref WatchtowerWebApi
       ResponseType: INTEGRATION_FAILURE
       ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Authorization,Content-Type'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,PUT,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Origin: '''*'''
+        gatewayresponse.header.Access-Control-Allow-Headers: '''Authorization,Content-Type'''
+        gatewayresponse.header.Access-Control-Allow-Methods: '''GET,PUT,OPTIONS'''
 
   GetAprsPositionsFunction:
     Type: AWS::Serverless::Function
@@ -745,11 +745,14 @@ Resources:
         Variables:
           APRSPOSITIONSTABLE_TABLE_NAME: !Ref AprsPositionsTable
           CONFIGTABLE_TABLE_NAME: !Ref ConfigTable
+          SUMMITS_TABLE_NAME: !Ref SummitsTable
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref AprsPositionsTable
         - DynamoDBReadPolicy:
             TableName: !Ref ConfigTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref SummitsTable
       LoggingConfig:
         LogFormat: Text
         LogGroup: !Ref SotaWatchtowerMasterLogGroup

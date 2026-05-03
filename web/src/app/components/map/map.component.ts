@@ -1069,14 +1069,26 @@ export class MapComponent implements OnInit, OnDestroy {
       const activatorLon = parseFloat(aprs.longitude);
       if (Number.isNaN(activatorLat) || Number.isNaN(activatorLon)) return;
 
+      // Use the nearest-summit data pre-computed by the backend (O(1) lookup).
+      // Falls back to the frontend haversine search only when the backend did
+      // not enrich the response (e.g. SummitsTable not yet wired, old cache).
       let nearest: SummitRecord | undefined;
-      let nearestKm = Number.POSITIVE_INFINITY;
+      let nearestKm: number;
 
-      for (const summit of this.allSummits) {
-        const km = this.haversineKm(activatorLat, activatorLon, summit.lat, summit.lon);
-        if (km < nearestKm) {
-          nearestKm = km;
-          nearest = summit;
+      if (aprs.nearestSummitCode !== undefined && aprs.nearestSummitDistanceKm !== undefined) {
+        // Fast path: backend already found the nearest summit within 2 km.
+        nearest  = this.summitByCode.get(aprs.nearestSummitCode);
+        nearestKm = aprs.nearestSummitDistanceKm;
+      } else {
+        // Fallback path: backend did not enrich (e.g. SUMMITS_TABLE_NAME not set).
+        // Still correct but runs the O(N × 150K) search — same as before this change.
+        nearestKm = Number.POSITIVE_INFINITY;
+        for (const summit of this.allSummits) {
+          const km = this.haversineKm(activatorLat, activatorLon, summit.lat, summit.lon);
+          if (km < nearestKm) {
+            nearestKm = km;
+            nearest = summit;
+          }
         }
       }
 

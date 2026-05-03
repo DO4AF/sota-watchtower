@@ -52,6 +52,14 @@ export interface AprsPosition {
   lastSeen:  string;
   /** Rolling position history stored inside the DynamoDB item for trace rendering */
   positions?: TrackPoint[];
+  /**
+   * Pre-computed by GetAprsPositionsFunction: nearest SOTA summit within
+   * APPROACHING_DISTANCE_KM (2 km). Only present when a summit is close.
+   * Eliminates the O(N × 150K) nearest-summit search on the frontend.
+   */
+  nearestSummitCode?: string;
+  nearestSummitName?: string;
+  nearestSummitDistanceKm?: number;
 }
 
 export interface AppConfig {
