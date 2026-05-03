@@ -53,6 +53,7 @@ export class AlertsComponent implements OnInit, OnDestroy {
   alertFilter          = '';
   spotFilter           = '';
   showOnlyWithPosition = false;
+  activeModeFilters    = new Set<string>();
 
   readonly ALERT_HIGHLIGHT_WINDOW_MINUTES = 60;
   readonly SPOT_HIGHLIGHT_WINDOW_MINUTES = 30;
@@ -60,6 +61,7 @@ export class AlertsComponent implements OnInit, OnDestroy {
 
   private aprsMap       = new Map<string, AprsPosition>();
   private summitCoordMap = new Map<string, { lat: number; lon: number }>();
+  private qrvCallsigns   = new Set<string>();   // normalized base callsigns spotted today (UTC)
 
   private subs: Subscription[] = [];
 
@@ -113,8 +115,10 @@ export class AlertsComponent implements OnInit, OnDestroy {
         this.aprsMap.clear();
         (aprs as AprsPosition[]).forEach(p => {
           this.aprsMap.set(p.callsign, p);
-          const base = p.callsign.replace(/-\d+$/, '');
-          if (base !== p.callsign) this.aprsMap.set(base, p);
+          const noSsid = p.callsign.replace(/-\d+$/, '');
+          if (noSsid !== p.callsign) this.aprsMap.set(noSsid, p);
+          const base = noSsid.replace(/\/[A-Z0-9]+$/i, '');
+          if (base !== noSsid) this.aprsMap.set(base, p);
         });
       },
       error: () => this.alertsLoading.set(false),
@@ -134,16 +138,43 @@ export class AlertsComponent implements OnInit, OnDestroy {
   private loadSpots(): void {
     this.spotsLoading.set(true);
     this.apiService.getSpots().subscribe({
-      next: data => { this.spots.set(data); this.spotsLoading.set(false); },
-      error: ()   => this.spotsLoading.set(false),
+      next: data => {
+        this.spots.set(data);
+        this.spotsLoading.set(false);
+        this.buildQrvSet(data);
+      },
+      error: () => this.spotsLoading.set(false),
     });
+  }
+
+  private buildQrvSet(spots: SotaSpot[]): void {
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    this.qrvCallsigns.clear();
+    spots.forEach(s => {
+      const ts = this.spotTimeMs(s);
+      if (ts === null) return;
+      const spotDay = new Date(ts).toISOString().slice(0, 10);
+      if (spotDay !== todayUtc) return;
+      const raw = this.spotCallsign(s);
+      if (!raw) return;
+      const base = raw.toUpperCase().replace(/\/[A-Z0-9]+$/i, '').replace(/-\d+$/, '');
+      this.qrvCallsigns.add(base);
+    });
+  }
+
+  isQrv(alert: SotaAlert): boolean {
+    const base = alert.callsign.toUpperCase().replace(/\/[A-Z0-9]+$/i, '').replace(/-\d+$/, '');
+    return this.qrvCallsigns.has(base);
   }
 
   // ── Position helpers ────────────────────────────────────────────────────────
 
   private lookupPosition(callsign: string): AprsPosition | undefined {
+    const noSsid = callsign.replace(/-\d+$/, '');
+    const base   = noSsid.replace(/\/[A-Z0-9]+$/i, '');
     return this.aprsMap.get(callsign)
-      ?? this.aprsMap.get(callsign.replace(/-\d+$/, ''));
+      ?? this.aprsMap.get(noSsid)
+      ?? this.aprsMap.get(base);
   }
 
   hasPosition(alert: SotaAlert): boolean {
@@ -262,6 +293,11 @@ export class AlertsComponent implements OnInit, OnDestroy {
       const withinAgeWindow = spotTs === null || (now - spotTs) <= maxAgeMs;
       if (!withinAgeWindow) return false;
 
+      if (this.activeModeFilters.size > 0) {
+        const mode = (s.mode ?? '').trim().toUpperCase();
+        if (!this.activeModeFilters.has(mode)) return false;
+      }
+
       if (!q) return true;
 
       return this.spotCallsign(s).toLowerCase().includes(q)
@@ -273,8 +309,32 @@ export class AlertsComponent implements OnInit, OnDestroy {
     });
   }
 
-  alertRowClass(alert: SotaAlert): string {
-    return this.isAlertInHighlightWindow(alert) ? 'table-row--highlight' : '';
+  /** Distinct mode values present in the current (unfiltered) spots list, sorted alphabetically. */
+  get availableModes(): string[] {
+    const modes = new Set<string>();
+    this.spots().forEach(s => {
+      const m = (s.mode ?? '').trim().toUpperCase();
+      if (m) modes.add(m);
+    });
+    return Array.from(modes).sort();
+  }
+
+  isModeActive(mode: string): boolean {
+    return this.activeModeFilters.has(mode.toUpperCase());
+  }
+
+  toggleMode(mode: string): void {
+    const key = mode.toUpperCase();
+    if (this.activeModeFilters.has(key)) {
+      this.activeModeFilters.delete(key);
+    } else {
+      this.activeModeFilters.add(key);
+    }
+    // Trigger change detection by reassigning to a new Set
+    this.activeModeFilters = new Set(this.activeModeFilters);
+  }
+
+  alertRowClass(alert: SotaAlert): string {    return this.isAlertInHighlightWindow(alert) ? 'table-row--highlight' : '';
   }
 
   spotRowClass(spot: SotaSpot): string {

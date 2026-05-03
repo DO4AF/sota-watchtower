@@ -216,6 +216,8 @@ export class MapComponent implements OnInit, OnDestroy {
   private recentSpotLinks: RecentSpotLink[] = [];
   private summitByCode = new Map<string, SummitRecord>();
   private tacticalLines: TacticalLineEntry[] = [];
+  /** Base callsigns (no SSID, no /P suffix) that have a spot today (UTC). */
+  private qrvCallsigns = new Set<string>();
 
   /**
    * All summit data received from the API, held in memory.
@@ -508,6 +510,7 @@ export class MapComponent implements OnInit, OnDestroy {
     this.activeAlertBaseCallsigns.clear();
     this.recentSpotSummits.clear();
     this.recentSpotLinks = [];
+    this.qrvCallsigns.clear();
 
     const todayUtc = new Date().toISOString().slice(0, 10);
 
@@ -568,6 +571,17 @@ export class MapComponent implements OnInit, OnDestroy {
         summitCode: summitRef,
         ageMin: (now - ts) / 60_000,
       });
+    });
+
+    // Build QRV set: any activator spotted today (UTC), regardless of summit
+    spots.forEach(spot => {
+      const ts = this.parseSpotTime(spot);
+      if (ts === null) return;
+      const spotDay = new Date(ts).toISOString().slice(0, 10);
+      if (spotDay !== todayUtc) return;
+      const callsign = String(spot.callsign ?? spot.activatorCallsign ?? '').trim();
+      if (!callsign) return;
+      this.qrvCallsigns.add(this.normalizeCallsign(callsign));
     });
   }
 
@@ -1258,11 +1272,17 @@ export class MapComponent implements OnInit, OnDestroy {
   }
 
   private normalizeCallsign(callsign: string): string {
-    return callsign.toUpperCase().replace(/-\d+$/, '');
+    // Strip portable/mobile suffix (e.g. /P, /M, /QRP, /MM) FIRST, then SSID (e.g. -7)
+    return callsign.toUpperCase().replace(/\/[A-Z0-9]+$/, '').replace(/-\d+$/, '');
   }
 
   callsignFlag(callsign: string): string {
     return getCallsignFlag(callsign);
+  }
+
+  /** Returns true when the given callsign was spotted today (UTC), indicating QRV status. */
+  isQrvCallsign(callsign: string): boolean {
+    return this.qrvCallsigns.has(this.normalizeCallsign(callsign));
   }
 
   private haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {

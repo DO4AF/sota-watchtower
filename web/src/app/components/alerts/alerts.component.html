@@ -46,6 +46,8 @@
         [stripedRows]="true"
         [scrollable]="true"
         scrollHeight="flex"
+        sortField="dateActivated"
+        [sortOrder]="1"
         styleClass="p-datatable-sm alerts-table"
       >
         <ng-template #header>
@@ -95,6 +97,9 @@
               } @else {
                 <p-tag value="Planned" severity="warn" icon="pi pi-clock" />
               }
+              @if (isQrv(alert)) {
+                <span class="qrv-badge" title="Spotted on air today">QRV</span>
+              }
             </td>
             <td class="action-cell">
               @if (getAlertPosition(alert)) {
@@ -120,11 +125,27 @@
     <div class="table-panel">
       <div class="panel-toolbar">
         <span class="panel-title"><i class="pi pi-wifi"></i> Live Spots</span>
-        <p-iconfield>
-          <p-inputicon styleClass="pi pi-search" />
-          <input pInputText type="text" [(ngModel)]="spotFilter"
-                 placeholder="Search…" class="panel-search" />
-        </p-iconfield>
+        <div class="toolbar-controls">
+          @if (availableModes.length > 0) {
+            <div class="mode-chips">
+              @for (mode of availableModes; track mode) {
+                <button
+                  type="button"
+                  class="mode-chip"
+                  [class.mode-chip--active]="isModeActive(mode)"
+                  (click)="toggleMode(mode)"
+                  [title]="'Filter by ' + mode">
+                  {{ mode }}
+                </button>
+              }
+            </div>
+          }
+          <p-iconfield>
+            <p-inputicon styleClass="pi pi-search" />
+            <input pInputText type="text" [(ngModel)]="spotFilter"
+                   placeholder="Search…" class="panel-search" />
+          </p-iconfield>
+        </div>
       </div>
 
       <p-table
@@ -134,6 +155,8 @@
         [stripedRows]="true"
         [scrollable]="true"
         scrollHeight="flex"
+        sortField="time"
+        [sortOrder]="-1"
         styleClass="p-datatable-sm spots-table"
       >
         <ng-template #header>

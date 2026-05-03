@@ -4,3 +4,4 @@ myconfig.toml
 TODO.md
 */__pycache__/*
 *.pyc
+.kilo/plans/

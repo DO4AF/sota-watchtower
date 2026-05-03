@@ -301,6 +301,23 @@
   vertical-align: baseline;
 }
 
+// QRV badge — activator was spotted on air today
+.qrv-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.3rem;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid #a6e3a166;
+  background: #a6e3a122;
+  color: #a6e3a1;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .chip-row {
   display: flex;
   gap: 6px;

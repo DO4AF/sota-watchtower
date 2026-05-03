@@ -120,6 +120,9 @@
                       <span class="callsign-flag">{{ callsignFlag(entry.callsign) }}</span>
                     }
                     {{ entry.callsign }}
+                    @if (isQrvCallsign(entry.callsign)) {
+                      <span class="qrv-badge" title="Spotted on air today">QRV</span>
+                    }
                   </span>
                   <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
                   @if (hasDistance(entry) && entry.distanceKm !== null) {
@@ -149,6 +152,9 @@
                       <span class="callsign-flag">{{ callsignFlag(entry.callsign) }}</span>
                     }
                     {{ entry.callsign }}
+                    @if (isQrvCallsign(entry.callsign)) {
+                      <span class="qrv-badge" title="Spotted on air today">QRV</span>
+                    }
                   </span>
                   <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
                   <span class="proximity-item__distance proximity-item__distance--no-aprs">No APRS</span>
@@ -179,6 +185,9 @@
                       <span class="callsign-flag">{{ callsignFlag(entry.callsign) }}</span>
                     }
                     {{ entry.callsign }}
+                    @if (isQrvCallsign(entry.callsign)) {
+                      <span class="qrv-badge" title="Spotted on air today">QRV</span>
+                    }
                   </span>
                   <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
                   @if (hasDistance(entry) && entry.distanceKm !== null) {

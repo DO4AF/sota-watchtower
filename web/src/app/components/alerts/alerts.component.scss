@@ -119,6 +119,55 @@
   font-size: 0.78rem;
 }
 
+// QRV badge — shown on alerts that have a matching spot today
+.qrv-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.35rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid #a6e3a166;
+  background: #a6e3a122;
+  color: #a6e3a1;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+// Mode filter chips
+
+.mode-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.mode-chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--p-surface-600);
+  background: transparent;
+  color: var(--p-text-muted-color);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  &:hover { border-color: #cba6f7; color: #cba6f7; }
+
+  &--active {
+    border-color: #cba6f7;
+    background: #cba6f722;
+    color: #cba6f7;
+  }
+}
+
 // APRS filter toggle
 .aprs-toggle {
   padding: 2px 9px;
