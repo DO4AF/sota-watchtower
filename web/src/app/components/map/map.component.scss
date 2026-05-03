@@ -366,32 +366,57 @@
     border-color: var(--p-primary-color);
   }
 
+  // Two-line identity grid:
+  //   col 1 (1fr): callsign (line 1), summit (line 2)
+  //   col 2 (auto): metric value (distance or time remaining, line 1 only)
   &__meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+    row-gap: 2px;
+    align-items: baseline;
   }
 
   &__callsign {
+    grid-column: 1;
+    grid-row: 1;
     font-family: 'Courier New', monospace;
     font-size: 0.82rem;
     font-weight: 700;
     color: var(--p-text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  &__distance {
-    font-size: 0.78rem;
+  // Metric value: distance (Alerted/Candidates) or time-remaining (Upcoming)
+  // Sits in the upper-right of the grid, aligned with the callsign row
+  &__metric {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 0.75rem;
     color: var(--p-text-muted-color);
     white-space: nowrap;
-    margin-left: auto;
+    text-align: right;
 
-    &--no-aprs {
-      color: #9e9e9e;
-      font-weight: 600;
+    // When used for upcoming-alert time status, color classes are applied via ngClass
+    &.proximity-item__status--upcoming {
+      color: #60a5fa;
+    }
+
+    &.proximity-item__status--overdue {
+      color: #f59e0b;
+    }
+
+    &.proximity-item__status--unknown {
+      color: var(--p-text-muted-color);
     }
   }
 
   &__summit {
+    grid-column: 1 / -1;  // span both columns on line 2
+    grid-row: 2;
     font-size: 0.74rem;
     color: var(--p-text-muted-color);
     min-width: 0;
@@ -418,27 +443,13 @@
     }
   }
 
-  &__status {
-    margin-top: 5px;
-    font-size: 0.68rem;
-    color: #60a5fa;
-    text-transform: uppercase;
-
-    &--overdue {
-      color: #f59e0b;
-    }
-  }
-
+  // Timing row for Upcoming Alerts: shows full UTC date+time below the identity grid
   &__timing {
-    margin-top: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    margin-top: 5px;
   }
 
   &__time-utc {
-    font-size: 0.72rem;
+    font-size: 0.70rem;
     color: var(--p-text-muted-color);
   }
 }

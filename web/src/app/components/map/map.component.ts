@@ -513,6 +513,8 @@ export class MapComponent implements OnInit, OnDestroy {
     this.qrvCallsigns.clear();
 
     const todayUtc = new Date().toISOString().slice(0, 10);
+    // Tomorrow's UTC date string (for including next-day alerts in Upcoming panel)
+    const tomorrowUtc = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
 
     const alertDateKey = (alert: Record<string, unknown>): string | null => {
       const rawDate = String(alert['dateActivated'] ?? alert['date_activated'] ?? alert['activationDate'] ?? '');
@@ -533,6 +535,12 @@ export class MapComponent implements OnInit, OnDestroy {
       const rawDate = String(alert['dateActivated'] ?? alert['date_activated'] ?? alert['activationDate'] ?? '').trim();
       const alertTimeMs = this.parseAlertTimeMs(rawDate);
       if (alertTimeMs === null) return true; // keep visible when timestamp is missing/invalid
+
+      // Tomorrow's alerts are always shown (they are future by definition)
+      const alertDate = new Date(alertTimeMs).toISOString().slice(0, 10);
+      if (alertDate === tomorrowUtc) return true;
+
+      // Today's alerts: keep if not more than 60 minutes overdue
       return alertTimeMs >= now - this.MAP_ALERT_MAX_OVERDUE_MINUTES * 60_000;
     };
 
@@ -542,6 +550,7 @@ export class MapComponent implements OnInit, OnDestroy {
       const callsign = String(a['callsign'] ?? a['activatorCallsign'] ?? '');
       const alertTimeRaw = String(a['dateActivated'] ?? a['date_activated'] ?? a['activationDate'] ?? '').trim();
       const alertDate = alertDateKey(a);
+      // Summit glow ring only for today's planned activations (not tomorrow)
       if (code && alertDate === todayUtc) this.todayPlannedSummits.add(code);
       if (callsign && code) {
         const active = {

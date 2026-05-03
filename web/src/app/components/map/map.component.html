@@ -124,10 +124,10 @@
                       <span class="qrv-badge" title="Spotted on air today">QRV</span>
                     }
                   </span>
-                  <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
                   @if (hasDistance(entry) && entry.distanceKm !== null) {
-                    <span class="proximity-item__distance">{{ distanceLabel(entry.distanceKm) }}</span>
+                    <span class="proximity-item__metric">{{ distanceLabel(entry.distanceKm) }}</span>
                   }
+                  <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
                 </div>
                 <div class="proximity-item__bar">
                   <div class="proximity-item__bar-fill" [style.width.%]="progressWidth(entry)"></div>
@@ -141,7 +141,7 @@
       <div class="panel panel--upcoming-alerts">
         <div class="panel__title">Upcoming Alerts (no APRS)</div>
         @if (upcomingAlerts().length === 0) {
-          <div class="panel__empty">No upcoming no-APRS alerts currently</div>
+          <div class="panel__empty">No upcoming alerts for today or tomorrow</div>
         } @else {
           <div class="proximity-list">
             @for (entry of upcomingAlerts(); track entry.callsign + ':' + entry.summitCode) {
@@ -156,14 +156,13 @@
                       <span class="qrv-badge" title="Spotted on air today">QRV</span>
                     }
                   </span>
+                  <span class="proximity-item__metric" [ngClass]="upcomingRemainingClass(entry)">
+                    {{ upcomingRemainingLabel(entry) }}
+                  </span>
                   <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
-                  <span class="proximity-item__distance proximity-item__distance--no-aprs">No APRS</span>
                 </div>
                 <div class="proximity-item__timing">
                   <div class="proximity-item__time-utc">{{ upcomingAlertTimeUtc(entry) }}</div>
-                  <div class="proximity-item__status" [ngClass]="upcomingRemainingClass(entry)">
-                    {{ upcomingRemainingLabel(entry) }}
-                  </div>
                 </div>
               </button>
             }
@@ -189,10 +188,10 @@
                       <span class="qrv-badge" title="Spotted on air today">QRV</span>
                     }
                   </span>
-                  <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
                   @if (hasDistance(entry) && entry.distanceKm !== null) {
-                    <span class="proximity-item__distance">{{ distanceLabel(entry.distanceKm) }}</span>
+                    <span class="proximity-item__metric">{{ distanceLabel(entry.distanceKm) }}</span>
                   }
+                  <span class="proximity-item__summit">{{ entry.summitCode }} · {{ entry.summitName }}</span>
                 </div>
                 <div class="proximity-item__bar">
                   <div class="proximity-item__bar-fill proximity-item__bar-fill--candidate" [style.width.%]="progressWidth(entry)"></div>
