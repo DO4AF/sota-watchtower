@@ -118,10 +118,11 @@ interface SummitRecord {
 // ─── Activator state ─────────────────────────────────────────────────────────
 
 interface ActivatorState {
-  callsign:  string;
-  positions: AprsPosition[];
-  marker:    L.Marker;
-  trace:     L.Polyline;
+  callsign:   string;
+  positions:  AprsPosition[];
+  marker:     L.Marker;
+  trace:      L.Polyline;
+  lastSeenMs: number;
 }
 
 interface ActiveAlert {
@@ -269,9 +270,17 @@ export class MapComponent implements OnInit, OnDestroy {
 
   readonly LABEL_ZOOM = 12;
 
+  private readonly _savedView = (() => {
+    try {
+      const raw = localStorage.getItem('mapView');
+      if (raw) return JSON.parse(raw) as { lat: number; lng: number; zoom: number };
+    } catch { /* ignore */ }
+    return null;
+  })();
+
   mapOptions: L.MapOptions = {
-    center:             [47.5, 11.0],
-    zoom:               7,
+    center:             this._savedView ? [this._savedView.lat, this._savedView.lng] : [47.5, 11.0],
+    zoom:               this._savedView?.zoom ?? 7,
     zoomControl:        true,
     attributionControl: true,
     preferCanvas:       true,   // use canvas for all vector layers
@@ -366,7 +375,11 @@ export class MapComponent implements OnInit, OnDestroy {
       // Re-run dynamic context with fresh alerts — spots may be stale but still valid
       this.refreshDynamicContext();
     });
-    map.on('zoomend moveend', () => this.scheduleViewportUpdate());
+    map.on('zoomend moveend', () => {
+      const c = this.map.getCenter();
+      localStorage.setItem('mapView', JSON.stringify({ lat: c.lat, lng: c.lng, zoom: this.map.getZoom() }));
+      this.scheduleViewportUpdate();
+    });
     this.eventLog.info('Map', 'Map ready');
   }
 
@@ -750,10 +763,12 @@ export class MapComponent implements OnInit, OnDestroy {
           return !Number.isNaN(ts) && now - ts <= maxAgeMs;
         });
 
-        // Remove activators no longer in the API response
-        const liveCallsigns = new Set(freshPositions.map(p => p.callsign));
+        // Remove activators whose last beacon is older than maxAgeMs.
+        // Intentionally NOT keyed off the current API response — the API filters
+        // by association bounding boxes, so changing associations should not
+        // forcibly remove recently-active markers.
         this.activators.forEach((st, cs) => {
-          if (!liveCallsigns.has(cs)) {
+          if (now - st.lastSeenMs > maxAgeMs) {
             this.activatorLayer.removeLayer(st.marker);
             this.activatorLayer.removeLayer(st.trace);
             this.activators.delete(cs);
@@ -794,7 +809,8 @@ export class MapComponent implements OnInit, OnDestroy {
             st.marker.setPopupContent(popup);
             st.trace.setLatLngs(tracePoints);
             st.trace.setStyle({ color: freshness.color });
-            st.positions = [pos];
+            st.positions  = [pos];
+            st.lastSeenMs = parseTimestamp(pos.lastSeen).getTime();
           } else {
             const marker = L.marker(latlng, {
               icon:         makeActivatorIcon(cs, freshness, hasActiveAlert),
@@ -820,7 +836,13 @@ export class MapComponent implements OnInit, OnDestroy {
 
             this.activatorLayer.addLayer(trace);
             this.activatorLayer.addLayer(marker);
-            this.activators.set(cs, { callsign: cs, positions: [pos], marker, trace });
+            this.activators.set(cs, {
+              callsign:   cs,
+              positions:  [pos],
+              marker,
+              trace,
+              lastSeenMs: parseTimestamp(pos.lastSeen).getTime(),
+            });
           }
 
           this.eventLog.info('APRS',
